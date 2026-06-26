@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teste de conexão — Painel CCC</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#f4f5f7;color:#111827;
+       max-width:720px;margin:30px auto;padding:0 16px;line-height:1.5}
+  h1{font-size:20px}
+  #log{background:#fff;border:1px solid #e2e5eb;border-radius:10px;padding:16px;margin-top:16px;
+       white-space:pre-wrap;font-family:Consolas,monospace;font-size:13px;min-height:120px}
+  .ok{color:#15803d;font-weight:600}
+  .err{color:#dc2626;font-weight:600}
+  .muted{color:#6b7280}
+  .big{font-size:22px;font-weight:700;margin-top:18px}
+</style>
+</head>
+<body>
+  <h1>🔌 Teste de conexão — Painel CCC</h1>
+  <p class="muted">Esta página só testa se o app consegue conversar com o banco de dados (Supabase).
+  Nada aqui mexe nos seus dados reais — usa uma chave de teste chamada <code>__teste_conexao__</code>.</p>
+  <div id="log">Iniciando teste...\n</div>
+  <div id="veredito" class="big"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://wpjqkhwmqedqvsmzbjzd.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_Uci-SdIZchMNiml3WBsu9A_0F7mbwso';
+
+    const logEl = document.getElementById('log');
+    const veredito = document.getElementById('veredito');
+    function log(msg, cls){
+      const span = document.createElement('span');
+      if(cls) span.className = cls;
+      span.textContent = msg + '\n';
+      logEl.appendChild(span);
+    }
+
+    (async () => {
+      try {
+        if (!window.supabase || !window.supabase.createClient) {
+          log('❌ Não consegui carregar a biblioteca do Supabase (sem internet?).', 'err');
+          veredito.textContent = '❌ Falhou ao carregar a biblioteca';
+          veredito.className = 'big err';
+          return;
+        }
+        log('✓ Biblioteca do Supabase carregada.', 'ok');
+
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        log('✓ Cliente criado. Tentando login anônimo...');
+
+        const { data: authData, error: authErr } = await sb.auth.signInAnonymously();
+        if (authErr) {
+          log('❌ Login anônimo FALHOU: ' + authErr.message, 'err');
+          log('   → Provavelmente o "Anonymous sign-ins" ainda está DESLIGADO no Supabase.', 'err');
+          log('   → Vá em Authentication → Sign In / Providers → ative "Anonymous sign-ins" → Save.', 'muted');
+          veredito.textContent = '❌ Falta ativar o login anônimo';
+          veredito.className = 'big err';
+          return;
+        }
+        log('✓ Login anônimo OK. Sessão criada.', 'ok');
+
+        const testValue = JSON.stringify({ teste: true, quando: new Date().toISOString() });
+        const { error: upErr } = await sb.from('kv_store')
+          .upsert({ key: '__teste_conexao__', value: testValue }, { onConflict: 'key' });
+        if (upErr) {
+          log('❌ Não consegui GRAVAR no banco: ' + upErr.message, 'err');
+          veredito.textContent = '❌ Erro ao gravar (ver regras/RLS)';
+          veredito.className = 'big err';
+          return;
+        }
+        log('✓ Gravação OK (escrevi uma linha de teste).', 'ok');
+
+        const { data: readData, error: readErr } = await sb.from('kv_store')
+          .select('value, updated_at').eq('key', '__teste_conexao__').maybeSingle();
+        if (readErr) {
+          log('❌ Não consegui LER do banco: ' + readErr.message, 'err');
+          veredito.textContent = '❌ Erro ao ler (ver regras/RLS)';
+          veredito.className = 'big err';
+          return;
+        }
+        log('✓ Leitura OK. Valor lido: ' + JSON.stringify(readData), 'ok');
+
+        veredito.textContent = '✅ TUDO FUNCIONANDO! Pode me avisar.';
+        veredito.className = 'big ok';
+      } catch (e) {
+        log('❌ Erro inesperado: ' + (e && e.message ? e.message : e), 'err');
+        veredito.textContent = '❌ Erro inesperado (me manda print)';
+        veredito.className = 'big err';
+      }
+    })();
+  </script>
+</body>
+</html>
