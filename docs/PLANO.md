@@ -34,8 +34,9 @@ as mesmas tarefas, em tempo real**, com login seguro.
   - [x] **Proteção de dados (essencial antes de publicar):** lista de empresas, fichas (CNPJ) e contatos foram REMOVIDAS do arquivo e movidas para o banco protegido (chaves `ccc_ref_v1` e `ccc_fichas_v1`). A página pública não contém nenhum dado de cliente — só carrega após login. Verificado.
   - [x] Projeto reorganizado (`index.html` na raiz) + README + .gitignore (exclui `original/`).
   - [x] **Arquitetura portável (anti-lock-in):** app desacoplado do Supabase. Fala só com `window.Backend`/`window.storage`. Supabase isolado em `backend-supabase.js`; config em `config.js`; contrato documentado em `docs/ARQUITETURA.md`. Para migrar a outro PostgreSQL, basta um novo `backend-*.js`. Verificado.
-  - [ ] Subir para o GitHub e ligar o GitHub Pages.
-- [ ] **Fase 5 — GitHub**: versionar o código (seu primeiro PR).
+  - [x] Subir para o GitHub e ligar o GitHub Pages. ✅ **No ar:** https://centrocontabilconcordia.github.io/painel-ccc/
+- [x] **Fase 5 — GitHub**: ✅ código versionado em https://github.com/CentroContabilConcordia/painel-ccc
+  - (Opcional) Fazer uma melhoria pequena via Pull Request, para experimentar o fluxo de PR.
 
 ## Limitações conhecidas (a melhorar depois)
 - **Concorrência:** a v1 grava a "gaveta" inteira de uma vez (igual hoje). Se duas pessoas

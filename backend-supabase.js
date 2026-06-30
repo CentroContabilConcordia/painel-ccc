@@ -86,7 +86,29 @@
     async signOut() { try { await _sb.auth.signOut(); } catch (e) {} },
     onRemoteChange(cb) { _remoteCb = cb; },
     get,
-    set
+    set,
+
+    // -------- Empresas (tabela relacional; a RLS já entrega só o que o usuário pode ver) --------
+    async getEmpresas() {
+      const { data, error } = await _sb.from('empresas').select('nome,fiscal_owner,ficha').order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+    async saveFicha(nome, ficha) {
+      const { error } = await _sb.from('empresas').update({ ficha }).eq('nome', nome);
+      if (error) throw error;
+      return true;
+    },
+    async addEmpresa(nome, fiscal_owner, ficha) {
+      const { error } = await _sb.from('empresas').insert({ nome, fiscal_owner: fiscal_owner || null, ficha: ficha || {} });
+      if (error) throw error;
+      return true;
+    },
+    async removeEmpresa(nome) {
+      const { error } = await _sb.from('empresas').delete().eq('nome', nome);
+      if (error) throw error;
+      return true;
+    }
   };
 
   // Compatibilidade: o app ja usa window.storage.get/set

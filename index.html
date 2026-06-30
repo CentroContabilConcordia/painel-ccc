@@ -11,8 +11,8 @@
      o adaptador atual. Para migrar para outro PostgreSQL no futuro, escreva
      um "backend-xxxx.js" com as mesmas funcoes e troque a linha abaixo. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
-<script src="backend-supabase.js"></script>
+<script src="config.js?v=2"></script>
+<script src="backend-supabase.js?v=2"></script>
 <!-- ===== fim camada de dados ===== -->
 
 <style>
@@ -663,24 +663,32 @@ async function saveColaboradores(){
   const p=JSON.stringify(colaboradores);
   try{await window.storage.set(SK_COLAB,p,true);}catch(e){try{localStorage.setItem(SK_COLAB,p);}catch(e2){}}
 }
-async function loadFichas(){
-  try{const r=await window.storage.get(SK_FICHAS,true);if(r&&r.value)fichas=JSON.parse(r.value);}
-  catch(e){try{const l=localStorage.getItem(SK_FICHAS);if(l)fichas=JSON.parse(l);}catch(e2){}}
-}
-// Carrega do banco protegido a lista de empresas por membro (antes ficava no arquivo).
+async function loadFichas(){ /* as fichas vêm da tabela empresas, carregada em loadRef() */ }
+// Carrega a LISTA de empresas + as FICHAS da tabela protegida.
+// A segurança (RLS) já entrega só o que a pessoa logada pode ver.
 async function loadRef(){
   try{
-    const r=await window.storage.get('ccc_ref_v1',true);
-    if(r&&r.value){
-      const d=JSON.parse(r.value);
-      const fill=(arr,vals)=>{arr.length=0;(vals||[]).forEach(v=>arr.push(v));};
-      fill(EMP_CRIS,d.EMP_CRIS);fill(EMP_CLEO,d.EMP_CLEO);fill(EMP_JULIA,d.EMP_JULIA);fill(TODAS_EMPRESAS,d.TODAS_EMPRESAS);
-    }
+    const lista = await window.Backend.getEmpresas(); // [{nome, fiscal_owner, ficha}]
+    const byOwner = {cris:[],cleo:[],julia:[],gab:[]};
+    const todas = []; const f = {};
+    lista.forEach(e=>{
+      todas.push(e.nome);
+      if(e.fiscal_owner && byOwner[e.fiscal_owner]) byOwner[e.fiscal_owner].push(e.nome);
+      if(e.ficha && Object.keys(e.ficha).length) f[e.nome] = e.ficha;
+    });
+    const fill=(arr,vals)=>{arr.length=0;vals.forEach(v=>arr.push(v));};
+    fill(EMP_CRIS,byOwner.cris); fill(EMP_CLEO,byOwner.cleo); fill(EMP_JULIA,byOwner.julia);
+    fill(TODAS_EMPRESAS, todas.sort((a,b)=>a.localeCompare(b,'pt')));
+    fichas = f;
   }catch(e){console.warn('[CCC] loadRef falhou',e);}
 }
 async function saveFichas(){
-  const p=JSON.stringify(fichas);
-  try{await window.storage.set(SK_FICHAS,p,true);}catch(e){try{localStorage.setItem(SK_FICHAS,p);}catch(e2){}}
+  // Salva a ficha da empresa atualmente aberta na tabela empresas.
+  try{
+    if(typeof empresaAtual!=='undefined' && empresaAtual && fichas[empresaAtual]!==undefined){
+      await window.Backend.saveFicha(empresaAtual, fichas[empresaAtual]);
+    }
+  }catch(e){console.warn('[CCC] saveFichas falhou',e);}
 }
 async function loadBancos(){
   try{const r=await window.storage.get(SK_BANCOS,true);if(r&&r.value)bancosCad=JSON.parse(r.value);}
@@ -803,7 +811,7 @@ async function iniciarApp(){
   if(window.Backend && window.Backend.onRemoteChange){
     window.Backend.onRemoteChange(async()=>{
       try{
-        await loadDB();await loadFichas();await loadBancos();await loadEmpresasCad();await loadColaboradores();
+        await loadDB();await loadRef();await loadBancos();await loadEmpresasCad();await loadColaboradores();
         if(empresaAtual)renderTarefas();
       }catch(e){ console.warn('[CCC] atualizacao em tempo real falhou', e); }
     });
@@ -845,7 +853,9 @@ function trocarView(v,btn){
 
 function renderMembros(){
   const el=document.getElementById('lista-membros');el.innerHTML='';
-  MEMBROS_FISCAL.forEach(m=>{
+  // gestora vê todos os membros; quem é do fiscal vê só a si mesmo
+  const visiveis = isGestora() ? MEMBROS_FISCAL : MEMBROS_FISCAL.filter(m=>m.id===usuarioAtual);
+  visiveis.forEach(m=>{
     const div=document.createElement('div');div.className='membro-btn'+(membroAtual===m.id?' active':'');
     div.onclick=()=>selecionarMembro(m.id);
     div.innerHTML=`<div class="mavatar" style="background:${m.cor}">${m.nome[0]}</div><div class="minfo2"><div class="mn">${m.nome}</div>${m.licenca?'<span class="licenca-pill">Licença</span>':`<div class="mt">${m.empresas.length} emp.</div>`}</div>`;
@@ -1601,8 +1611,10 @@ async function cadastrarEmpresa(){
   };
   // Criar ficha automaticamente
   fichas[nome]={...empresasCad[nome],obs:[],contatos:[]};
+  try{ await window.Backend.addEmpresa(nome, empresasCad[nome].respFiscal||null, fichas[nome]); }
+  catch(e){ toast('Erro ao cadastrar empresa','#dc2626'); return; }
   await saveEmpresasCad();
-  await saveFichas();
+  await loadRef();
   renderAdminConteudo();
   toast('✓ Empresa cadastrada!');
 }
@@ -1610,7 +1622,9 @@ async function cadastrarEmpresa(){
 async function removerEmpresaCad(nome){
   if(!confirm(`Remover "${nome}" do sistema?`))return;
   delete empresasCad[nome];
+  try{ await window.Backend.removeEmpresa(nome); }catch(e){}
   await saveEmpresasCad();
+  await loadRef();
   renderAdminConteudo();
   toast('Empresa removida');
 }

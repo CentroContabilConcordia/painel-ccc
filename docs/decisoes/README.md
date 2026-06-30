@@ -1,0 +1,48 @@
+# 🗂️ Registro de Decisões (ADR)
+
+Cada decisão técnica relevante do projeto fica registrada aqui, num arquivo
+curto. O objetivo é simples: **daqui a anos, qualquer pessoa entende POR QUE o
+sistema é do jeito que é** — e qual benefício aquela escolha trouxe.
+
+> "ADR" = *Architecture Decision Record* (Registro de Decisão de Arquitetura).
+> Não precisa entender o termo — é só uma ficha de decisão.
+
+## Como funciona
+1. Toda decisão técnica relevante é **proposta** primeiro (em português claro).
+2. Só é **implementada após aprovação** explícita (ver Governança no `MASTER-PLAN.md`).
+3. Depois de aprovada, vira um arquivo `ADR-XXXX-titulo.md` aqui, usando o modelo abaixo.
+
+## Modelo (copie para criar uma nova decisão)
+
+```markdown
+# ADR-XXXX — <título da decisão>
+
+- **Data:** AAAA-MM-DD
+- **Status:** Proposta | Aprovada | Substituída por ADR-YYYY
+- **Aprovado por:** <nome>
+
+## Contexto
+Qual problema ou necessidade levou a esta decisão.
+
+## Decisão
+O que foi decidido, de forma direta.
+
+## Alternativas consideradas
+- Opção A — ...
+- Opção B — ...
+
+## Consequências técnicas
+O que muda no sistema (código, banco, segurança, manutenção).
+
+## Impacto operacional (no escritório)
+Como isso afeta o dia a dia da equipe e/ou dos clientes.
+
+## Benefício esperado
+- ⏱️ **Tempo:** ...
+- ✅ **Qualidade:** ...
+- 🛡️ **Redução de erros:** ...
+```
+
+## Índice de decisões
+- [ADR-0001 — Adotar registro de decisões (ADR)](ADR-0001-registro-de-decisoes.md)
+- [ADR-0002 — Isolamento de acesso por pessoa ("gavetas por pessoa")](ADR-0002-isolamento-por-pessoa.md)
