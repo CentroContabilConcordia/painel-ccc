@@ -819,12 +819,12 @@ async function iniciarApp(){
     window.Backend.onRemoteChange(async()=>{
       try{
         await loadDB();await loadRef();await loadBancos();await loadEmpresasCad();await loadColaboradores();
-        if(empresaAtual)renderTarefas();
+        if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas();
       }catch(e){ console.warn('[CCC] atualizacao em tempo real falhou', e); }
     });
   }
   trocarView(isGestora()?'fiscal':USUARIOS[usuarioAtual].setor,document.querySelector('.nav-btn'));
-  setInterval(async()=>{await loadDB();if(empresaAtual)renderTarefas();},20000);
+  setInterval(async()=>{await loadDB();if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas();},20000);
 }
 
 function trocarView(v,btn){
@@ -917,6 +917,8 @@ function selecionarEmpresa(emp){
   renderTarefas();
 }
 
+// Evita redesenhar a tela enquanto a pessoa está digitando (não apaga o que ela escreveu).
+function _editando(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
 function renderTarefas(){
   const col=document.getElementById('col-tarefas');col.innerHTML='';
   const mk=getMembroKey();const md=getMesData(setorAtual,mk,empresaAtual,mesAtual);
