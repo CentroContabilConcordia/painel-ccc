@@ -11,8 +11,8 @@
      o adaptador atual. Para migrar para outro PostgreSQL no futuro, escreva
      um "backend-xxxx.js" com as mesmas funcoes e troque a linha abaixo. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=2"></script>
-<script src="backend-supabase.js?v=2"></script>
+<script src="config.js?v=3"></script>
+<script src="backend-supabase.js?v=3"></script>
 <!-- ===== fim camada de dados ===== -->
 
 <style>
@@ -1236,6 +1236,18 @@ async function salvarNovaTarefa(){
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('modal-tarefa').addEventListener('click',e=>{if(e.target===document.getElementById('modal-tarefa'))fecharModal();});
   initLogin();
+  // "Continuar conectada": se já houver uma sessão válida, entra direto (sem relogar).
+  (async()=>{
+    try{
+      const id = window.Backend && window.Backend.currentUser ? await window.Backend.currentUser() : null;
+      if(id && USUARIOS[id]){
+        usuarioAtual = id;
+        document.getElementById('login-screen').style.display='none';
+        document.getElementById('app').classList.add('visible');
+        iniciarApp();
+      }
+    }catch(e){ console.warn('[CCC] auto-login falhou', e); }
+  })();
 });
 // ═══ ABA EMPRESA ═══
 function trocarAbaEmpresa(aba){

@@ -84,6 +84,17 @@
       }
     },
     async signOut() { try { await _sb.auth.signOut(); } catch (e) {} },
+    // Quem está logada agora (id do perfil) ou null — usado p/ "continuar conectada".
+    async currentUser() {
+      try {
+        const { data } = await _sb.auth.getSession();
+        const s = data && data.session;
+        if (!s || (s.user && s.user.is_anonymous)) return null;
+        const email = (s.user && s.user.email) || '';
+        const id = email.split('@')[0];
+        return id || null;
+      } catch (e) { return null; }
+    },
     onRemoteChange(cb) { _remoteCb = cb; },
     get,
     set,
