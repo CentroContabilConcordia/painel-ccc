@@ -46,3 +46,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 ## Índice de decisões
 - [ADR-0001 — Adotar registro de decisões (ADR)](ADR-0001-registro-de-decisoes.md)
 - [ADR-0002 — Isolamento de acesso por pessoa ("gavetas por pessoa")](ADR-0002-isolamento-por-pessoa.md)
+- [ADR-0003 — Senhas mais fortes (PINs aleatórios de 6 dígitos)](ADR-0003-senhas-fortes.md)

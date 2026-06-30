@@ -65,6 +65,9 @@ os processos da equipe. _(Beleza visual/celular fica para depois.)_
 | Dados de cliente fora do código (protegidos) | ✅ |
 | Publicado: https://centrocontabilconcordia.github.io/painel-ccc/ | ✅ |
 | Código versionado: github.com/CentroContabilConcordia/painel-ccc | ✅ |
+| Isolamento de acesso (fiscal por pessoa; contábil aberto; gestoras tudo) — RLS no banco | ✅ (ADR-0002) |
+| Senhas fortes (substituir PINs óbvios) | ⬜ próximo |
+| Isolamento das TAREFAS por pessoa (hoje tarefas vazias) | ⬜ fase futura |
 | Layout no celular (responsivo) | ⬜ adiado de propósito |
 
 **Stack atual:** HTML/CSS/JS (1 arquivo) + Supabase (PostgreSQL + Auth + Realtime) + GitHub Pages.
