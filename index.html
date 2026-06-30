@@ -796,9 +796,16 @@ async function iniciarApp(){
     document.getElementById('btn-add-tarefa').style.display='';
   } else {
     const setor=u.setor;
-    const btn=document.createElement('button');btn.className='nav-btn active';
-    btn.textContent=setor==='fiscal'?'📊 Setor Fiscal':'📚 Setor Contábil';
-    btn.onclick=()=>trocarView(setor,btn);nav.appendChild(btn);
+    if(setor==='fiscal'){
+      // Proposta 04: a fiscal cuida da própria carteira no Fiscal E no Contábil
+      const bf=document.createElement('button');bf.className='nav-btn active';bf.textContent='📊 Setor Fiscal';
+      bf.onclick=()=>trocarView('fiscal',bf);nav.appendChild(bf);
+      const bc=document.createElement('button');bc.className='nav-btn';bc.textContent='📚 Setor Contábil';
+      bc.onclick=()=>trocarView('contabil',bc);nav.appendChild(bc);
+    } else {
+      const btn=document.createElement('button');btn.className='nav-btn active';btn.textContent='📚 Setor Contábil';
+      btn.onclick=()=>trocarView('contabil',btn);nav.appendChild(btn);
+    }
     document.getElementById('btn-add-tarefa').style.display='none';
   }
   await loadRef();
@@ -835,8 +842,8 @@ function trocarView(v,btn){
   const colMembros=document.getElementById('col-membros');
   if(v==='contabil'){
     colMembros.style.display='none';
-    document.getElementById('col2-titulo').textContent='Todas as Empresas';
-    document.getElementById('col2-count').textContent='276 empresas';
+    document.getElementById('col2-titulo').textContent=(isGestora()||u.setor==='contabil')?'Todas as Empresas':'Minhas Empresas';
+    document.getElementById('col2-count').textContent=TODAS_EMPRESAS.length+' empresas';
     document.getElementById('emp-busca').value='';empFiltro='';
     renderEmpresasContabil();
   } else {
