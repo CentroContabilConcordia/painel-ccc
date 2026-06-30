@@ -438,6 +438,8 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
     </div>
   </div>
 
+  <div class="rel-wrap" id="painel-monitor" style="display:none"></div>
+
   <div class="rel-wrap" id="painel-relatorios" style="display:none">
     <div class="rel-titulo">Relatórios de Gestão</div>
     <div class="rel-sub">Acompanhe os resultados por mês, setor, pessoa e tarefa</div>
@@ -791,9 +793,9 @@ async function iniciarApp(){
   document.getElementById('dias-ret').textContent=diff>0?`Faltam ${diff} dias`:'Retorno esta semana!';
   const nav=document.getElementById('nav-wrap');nav.innerHTML='';
   if(isGestora()){
-    ['fiscal','contabil','relatorios','admin'].forEach(v=>{
-      const btn=document.createElement('button');btn.className='nav-btn'+(v==='fiscal'?' active':'');
-      btn.textContent=v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
+    ['monitor','fiscal','contabil','relatorios','admin'].forEach(v=>{
+      const btn=document.createElement('button');btn.className='nav-btn'+(v==='monitor'?' active':'');
+      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
       btn.onclick=()=>trocarView(v,btn);nav.appendChild(btn);
     });
     document.getElementById('btn-add-tarefa').style.display='';
@@ -826,7 +828,7 @@ async function iniciarApp(){
       }catch(e){ console.warn('[CCC] atualizacao em tempo real falhou', e); }
     });
   }
-  trocarView(isGestora()?'fiscal':USUARIOS[usuarioAtual].setor,document.querySelector('.nav-btn'));
+  trocarView(isGestora()?'monitor':USUARIOS[usuarioAtual].setor,document.querySelector('.nav-btn'));
   setInterval(async()=>{await loadDB();if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas();},20000);
 }
 
@@ -834,10 +836,13 @@ function trocarView(v,btn){
   viewAtual=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  document.getElementById('painel-operacional').style.display=(v==='relatorios'||v==='admin')?'none':'flex';
+  const formViews=(v==='relatorios'||v==='admin'||v==='monitor');
+  document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
   document.getElementById('painel-admin').style.display=v==='admin'?'block':'none';
-  document.getElementById('btn-add-tarefa').style.display=isGestora()&&v!=='relatorios'&&v!=='admin'?'':'none';
+  document.getElementById('painel-monitor').style.display=v==='monitor'?'block':'none';
+  document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews?'':'none';
+  if(v==='monitor'){initMonitor();return;}
   if(v==='relatorios'){initRelatorios();return;}
   if(v==='admin'){initAdmin();return;}
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
@@ -1007,6 +1012,70 @@ function renderHistorico(col,cor){
 // ══════════════════════════════
 // RELATÓRIOS
 // ══════════════════════════════
+function _nomePessoa(rid){ return (USUARIOS[rid]&&USUARIOS[rid].nome) || ((TODOS_MEMBROS.find(m=>m.id===rid)||{}).nome) || rid; }
+function _corPessoa(rid){ return (USUARIOS[rid]&&USUARIOS[rid].cor) || '#6b7280'; }
+function initMonitor(){
+  const mes=mesAtual;
+  let total=0,concl=0,atras=0,agu=0,pend=0;
+  const porPessoa={}, empMap={}, porTarefa={};
+  ['fiscal','contabil'].forEach(s=>{
+    const mks=s==='fiscal'?MEMBROS_FISCAL.map(m=>m.id):['contabil'];
+    mks.forEach(mk=>{
+      const emps=s==='fiscal'?(MEMBROS_FISCAL.find(x=>x.id===mk)?.empresas||[]):TODAS_EMPRESAS;
+      emps.forEach(emp=>{
+        const md=getMesData(s,mk,emp,mes); const ts=md.tarefas||[];
+        if(ts.length===0)return;
+        const rid=s==='fiscal'?mk:(md.responsavel||'contabil');
+        if(!porPessoa[rid])porPessoa[rid]={total:0,ok:0,atrasado:0,aguardando:0,empresas:0};
+        porPessoa[rid].empresas++;
+        if(!empMap[emp])empMap[emp]={total:0,ok:0,atrasado:0,aguardando:0,resp:rid};
+        ts.forEach(t=>{
+          total++; porPessoa[rid].total++; empMap[emp].total++;
+          const ok=(t.status==='concluido'||t.status==='naoseaplica');
+          if(!porTarefa[t.desc])porTarefa[t.desc]={total:0,atrasado:0,aguardando:0,pendente:0};
+          porTarefa[t.desc].total++;
+          if(ok){concl++;porPessoa[rid].ok++;empMap[emp].ok++;}
+          if(t.status==='atrasado'){atras++;porPessoa[rid].atrasado++;empMap[emp].atrasado++;porTarefa[t.desc].atrasado++;}
+          if(t.status==='aguardando'){agu++;porPessoa[rid].aguardando++;empMap[emp].aguardando++;porTarefa[t.desc].aguardando++;}
+          if(t.status==='pendente'){pend++;porTarefa[t.desc].pendente++;}
+        });
+      });
+    });
+  });
+  const el=document.getElementById('painel-monitor');
+  const cab=`<div class="rel-titulo">📡 Monitoramento · ${mesLabel(mes)}</div>
+    <div class="rel-sub">Visão rápida do que precisa de atenção (atualiza conforme a equipe marca as tarefas)</div>`;
+  if(total===0){
+    el.innerHTML=cab+`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:30px;text-align:center;color:var(--muted);margin-top:16px;">
+      Ainda não há tarefas marcadas neste mês. 🌱<br>O painel ganha vida conforme a equipe for usando o sistema.</div>`;
+    return;
+  }
+  const pct=total>0?Math.round(concl/total*100):0;
+  const card=(cor,val,lbl)=>`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;flex:1;min-width:120px;">
+    <div style="font-size:26px;font-weight:700;color:${cor}">${val}</div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">${lbl}</div></div>`;
+  const sec=(t,c)=>`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:14px;"><div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px;">${t}</div>${c}</div>`;
+  const tagAtr=v=>`${v.atrasado?`<span style="color:var(--red)">🔴 ${v.atrasado}</span> `:''}${v.aguardando?`<span style="color:var(--yellow)">🟡 ${v.aguardando}</span>`:''}`;
+
+  const pessoas=Object.entries(porPessoa).sort((a,b)=>(b[1].atrasado+b[1].aguardando)-(a[1].atrasado+a[1].aguardando));
+  const pessoasHtml=pessoas.map(([rid,v])=>{const p=v.total>0?Math.round(v.ok/v.total*100):0;return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div style="width:26px;height:26px;border-radius:50%;background:${_corPessoa(rid)};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${_nomePessoa(rid)[0]}</div>
+      <div style="flex:1;min-width:110px;"><div style="font-size:13px;font-weight:600;">${_nomePessoa(rid)}</div><div style="font-size:10px;color:var(--muted);">${v.empresas} empresa(s)</div></div>
+      <div style="flex:2;min-width:100px;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="height:100%;width:${p}%;background:var(--green);"></div></div></div>
+      <div style="font-size:13px;font-weight:700;width:42px;text-align:right;">${p}%</div>
+      <div style="font-size:11px;width:90px;text-align:right;">${tagAtr(v)}</div></div>`;}).join('');
+
+  const emps=Object.entries(empMap).filter(([,v])=>v.atrasado>0||v.aguardando>0).sort((a,b)=>(b[1].atrasado*10+b[1].aguardando)-(a[1].atrasado*10+a[1].aguardando)).slice(0,25);
+  const empsHtml=emps.length?emps.map(([emp,v])=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;"><div style="flex:1;">${emp}</div><div style="font-size:10px;color:var(--muted);">${_nomePessoa(v.resp)}</div><div style="width:100px;text-align:right;">${tagAtr(v)}</div></div>`).join(''):'<div style="color:var(--muted);padding:10px;">Nenhuma empresa com atraso ou esperando documento. 🎉</div>';
+
+  const tar=Object.entries(porTarefa).filter(([,v])=>v.atrasado>0||v.aguardando>0||v.pendente>0).sort((a,b)=>(b[1].atrasado*10+b[1].aguardando*5+b[1].pendente)-(a[1].atrasado*10+a[1].aguardando*5+a[1].pendente)).slice(0,25);
+  const tarHtml=tar.length?tar.map(([desc,v])=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;"><div style="flex:1;">${desc}</div><div style="width:180px;text-align:right;">${v.atrasado?`<span style="color:var(--red)">🔴 ${v.atrasado}</span> `:''}${v.aguardando?`<span style="color:var(--yellow)">🟡 ${v.aguardando}</span> `:''}${v.pendente?`<span style="color:var(--muted)">⏳ ${v.pendente}</span>`:''}</div></div>`).join(''):'<div style="color:var(--muted);padding:10px;">Sem pendências por tipo de tarefa. 🎉</div>';
+
+  el.innerHTML=cab+`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+      ${card('var(--green)',pct+'%','Concluído')}${card('var(--red)',atras,'🔴 Atrasadas')}${card('var(--yellow)',agu,'🟡 Aguardando doc.')}${card('var(--muted)',pend,'⏳ Pendentes')}</div>
+    ${sec('👥 Por pessoa',pessoasHtml)}
+    ${sec('🏢 Empresas que precisam de atenção',empsHtml)}
+    ${sec('📋 Por tipo de tarefa',tarHtml)}`;
+}
 function initRelatorios(){
   const selMes=document.getElementById('rel-mes');selMes.innerHTML='';
   const d=new Date();

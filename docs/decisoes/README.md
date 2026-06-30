@@ -51,3 +51,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0005 — Equipe pode editar as Observações da ficha](ADR-0005-equipe-edita-observacoes.md)
 - [ADR-0006 — "Continuar conectada" (sessão persistente)](ADR-0006-continuar-conectada.md)
 - [ADR-0007 — Bancos isolados por empresa + equipe pode editar](ADR-0007-bancos-isolados-equipe.md)
+- [ADR-0008 — Painel de Monitoramento da gestora](ADR-0008-painel-monitoramento.md)

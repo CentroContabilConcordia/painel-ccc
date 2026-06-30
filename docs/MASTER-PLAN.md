@@ -118,13 +118,41 @@ os processos da equipe. _(Beleza visual/celular fica para depois.)_
 
 ---
 
-## 7. Fluxos (como cada processo funciona)
+## 7. Fluxos
 
-`[A DEFINIR COM A EQUIPE]` — vamos mapear um fluxo por vez, ex.:
-- Fechamento fiscal mensal de uma empresa (passo a passo real)
-- Entrada de um cliente novo
-- Emissão de certidão
-- Atendimento via Portal do Cliente
+### 7.1 Fechamento mensal de uma empresa — ✅ mapeado (30/06/2026)
+
+**Quem faz:** a responsável (fiscal) faz as **4 fases sozinha**, para cada empresa da
+sua carteira. As **gestoras monitoram** (não aprovam etapa a etapa).
+
+**Fases:**
+1. **Documentos** — receber do cliente: extratos, XMLs, distribuição de lucros, pró-labore, plano de saúde.
+2. **Fechamento** — conferir NF-e (entrada/saída), serviços tomados/prestados, importar XML, conferir CFOP/CST/NCM, encerrar o mês.
+3. **Apuração** — apurar tributos (Simples/PGDAS, ICMS, PIS/COFINS, ISS, IRPJ/CSLL, retenções…) e emitir guias.
+4. **Obrigações + Entrega** — SPED/declarações e entregar/avisar o cliente.
+
+**Onde mais trava / gera retrabalho (as 4 dores — todas confirmadas):**
+- 🔴 **D1 — Cliente atrasa os documentos** (Fase 1).
+- 🔴 **D2 — Nota faltando → refaz a apuração** (dado incompleto).
+- 🔴 **D3 — Erro de classificação (CFOP/CST/NCM) que só aparece no fim**.
+- 🔴 **D4 — Esquecem de cobrar / fazer algo** (etapa esquecida).
+
+**Como o sistema combate cada dor:**
+| Dor | Solução no sistema |
+|---|---|
+| D1 atraso docs | Status "aguardando documento" + registro de quando foi cobrado; painel da gestora mostra quem está parado esperando cliente. |
+| D2 nota faltando | Marcar "documentos conferidos" antes de liberar a Apuração — sinaliza se apurar com pendência. |
+| D3 classificação | Checklist explícito de conferência (CFOP/CST/NCM) na Fase 2 — não dá pra "esquecer de conferir". |
+| D4 esquecimento | Checklist padrão por empresa/mês (já existe) + alertas do que está parado/atrasado. |
+
+**Base já pronta:** checklist padrão de tarefas por empresa/mês; status por tarefa
+(pendente/andamento/aguardando/atrasado/concluído/N-A); barra de progresso %.
+
+**A construir (prioridade a definir):** painel de monitoramento da gestora · status
+"aguardando documento" + cobrança · alertas de atraso · trava de docs antes da apuração.
+
+### 7.2 Outros fluxos — `[A MAPEAR DEPOIS]`
+Entrada de cliente novo · Emissão de certidão · Atendimento via Portal do Cliente.
 
 ---
 
