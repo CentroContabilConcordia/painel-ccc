@@ -1340,14 +1340,13 @@ function renderFicha(col){
         ${(ficha.obs||[]).map(o=>`
           <div class="obs-item" id="obs-${o.id}">
             <div class="obs-texto">${o.texto}</div>
-            ${podeEditar?`<button class="obs-del" onclick="deletarObs('${o.id}')">✕</button>`:''}
+            <button class="obs-del" onclick="deletarObs('${o.id}')">✕</button>
           </div>`).join('')}
       </div>
-      ${podeEditar?`
-        <div class="obs-add-row">
-          <textarea class="obs-add-inp" id="obs-nova" placeholder="Adicionar observação, particularidade ou alerta..."></textarea>
-          <button class="obs-add-btn" onclick="adicionarObs()">Adicionar</button>
-        </div>`:''}
+      <div class="obs-add-row">
+        <textarea class="obs-add-inp" id="obs-nova" placeholder="Adicionar observação, particularidade ou alerta..."></textarea>
+        <button class="obs-add-btn" onclick="adicionarObs()">Adicionar</button>
+      </div>
     </div>
 
     ${podeEditar?`<button class="ficha-save-btn" onclick="salvarFicha()">💾 Salvar Ficha</button>`:''}
@@ -1412,7 +1411,6 @@ async function salvarFicha(){
 }
 
 async function adicionarObs(){
-  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
   const inp=document.getElementById('obs-nova');
   const texto=inp?.value.trim();if(!texto)return;
   const ficha=getFicha(empresaAtual);
@@ -1427,7 +1425,6 @@ async function adicionarObs(){
 }
 
 async function deletarObs(obsId){
-  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
   ficha.obs=(ficha.obs||[]).filter(o=>o.id!==obsId);
   fichas[empresaAtual]=ficha;

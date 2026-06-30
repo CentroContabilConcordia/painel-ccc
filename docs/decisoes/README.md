@@ -48,3 +48,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0002 — Isolamento de acesso por pessoa ("gavetas por pessoa")](ADR-0002-isolamento-por-pessoa.md)
 - [ADR-0003 — Senhas mais fortes (PINs aleatórios de 6 dígitos)](ADR-0003-senhas-fortes.md)
 - [ADR-0004 — Fiscal também faz contábil das próprias empresas](ADR-0004-fiscal-faz-contabil.md)
+- [ADR-0005 — Equipe pode editar as Observações da ficha](ADR-0005-equipe-edita-observacoes.md)
