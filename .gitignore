@@ -1,6 +1,11 @@
 # Backup da versao original (contem dados de clientes) — NAO publicar
 original/
 
+# Arquivos temporarios de dados (contem dados de cliente) — NAO publicar
+_pdf_*.json
+_tmp_*.json
+_backup_*.json
+
 # Arquivos de sistema
 Thumbs.db
 Desktop.ini

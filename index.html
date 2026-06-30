@@ -1283,6 +1283,11 @@ function renderFicha(col){
         <div class="ficha-campo"><div class="ficha-label">CNPJ</div><input class="ficha-input" id="f-cnpj" value="${ficha.cnpj||''}" placeholder="00.000.000/0001-00" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Data de Abertura</div><input class="ficha-input" id="f-abertura" type="date" value="${ficha.abertura||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">CNAE Principal</div><input class="ficha-input" id="f-cnae" value="${ficha.cnae||''}" placeholder="Ex: 6920-6/01" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Natureza Jurídica</div><input class="ficha-input" id="f-natureza" value="${ficha.natureza||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Inscrição Estadual</div><input class="ficha-input" id="f-inscEstadual" value="${ficha.inscEstadual||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Inscrição Municipal</div><input class="ficha-input" id="f-inscMunicipal" value="${ficha.inscMunicipal||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Telefone</div><input class="ficha-input" id="f-telefone" value="${ficha.telefone||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Município</div><input class="ficha-input" id="f-municipio" value="${ficha.municipio||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Responsável Fiscal</div>
           <select class="ficha-select" id="f-respFiscal" ${dis}>
             <option value="">— Selecione —</option>
@@ -1387,6 +1392,11 @@ async function salvarFicha(){
   ficha.cnpj=document.getElementById('f-cnpj')?.value||'';
   ficha.abertura=document.getElementById('f-abertura')?.value||'';
   ficha.cnae=document.getElementById('f-cnae')?.value||'';
+  ficha.natureza=document.getElementById('f-natureza')?.value||'';
+  ficha.inscEstadual=document.getElementById('f-inscEstadual')?.value||'';
+  ficha.inscMunicipal=document.getElementById('f-inscMunicipal')?.value||'';
+  ficha.telefone=document.getElementById('f-telefone')?.value||'';
+  ficha.municipio=document.getElementById('f-municipio')?.value||'';
   ficha.respFiscal=document.getElementById('f-respFiscal')?.value||'';
   ficha.respContabil=document.getElementById('f-respContabil')?.value||'';
   ficha.regime=document.getElementById('f-regime')?.value||'Simples Nacional';
