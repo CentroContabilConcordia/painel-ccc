@@ -1354,7 +1354,8 @@ function renderFicha(col){
         ${(ficha.obs||[]).map(o=>`
           <div class="obs-item" id="obs-${o.id}">
             <div class="obs-texto">${o.texto}</div>
-            <button class="obs-del" onclick="deletarObs('${o.id}')">✕</button>
+            <button class="obs-del" onclick="editarObs('${o.id}')" title="Editar">✎</button>
+            <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>
           </div>`).join('')}
       </div>
       <div class="obs-add-row">
@@ -1363,7 +1364,10 @@ function renderFicha(col){
       </div>
     </div>
 
-    ${podeEditar?`<button class="ficha-save-btn" onclick="salvarFicha()">💾 Salvar Ficha</button>`:''}
+    ${podeEditar?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button class="ficha-save-btn" onclick="salvarFicha()">💾 Salvar Ficha</button>
+      <button class="ficha-save-btn" style="background:var(--red)" onclick="excluirEmpresaAtual()">🗑️ Excluir Empresa</button>
+    </div>`:''}
   `;
   col.appendChild(wrap);
 }
@@ -1445,6 +1449,20 @@ async function deletarObs(obsId){
   await saveFichas();
   renderTarefas();
   toast('Observação removida');
+}
+async function editarObs(obsId){
+  const ficha=getFicha(empresaAtual);
+  const o=(ficha.obs||[]).find(x=>x.id===obsId);
+  if(!o)return;
+  const novo=prompt('Editar observação:', o.texto);
+  if(novo===null)return;            // cancelou
+  const txt=novo.trim();
+  if(!txt){toast('Texto vazio — não alterado','#d97706');return;}
+  o.texto=txt;
+  fichas[empresaAtual]=ficha;
+  await saveFichas();
+  renderTarefas();
+  toast('✓ Observação atualizada');
 }
 
 // ═══ BANCOS ═══
@@ -1655,6 +1673,21 @@ async function removerEmpresaCad(nome){
   await loadRef();
   renderAdminConteudo();
   toast('Empresa removida');
+}
+// Excluir a empresa atualmente aberta (a partir da ficha) — só gestora.
+async function excluirEmpresaAtual(){
+  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
+  const nome=empresaAtual;
+  if(!nome)return;
+  if(!confirm(`Excluir a empresa "${nome}" do sistema?\nEsta ação NÃO pode ser desfeita.`))return;
+  try{ await window.Backend.removeEmpresa(nome); }
+  catch(e){ toast('Erro ao excluir empresa','#dc2626'); return; }
+  delete empresasCad[nome];
+  try{ await saveEmpresasCad(); }catch(e){}
+  await loadRef();
+  empresaAtual=null;
+  trocarView(viewAtual, document.querySelector('.nav-btn.active'));
+  toast('Empresa excluída');
 }
 
 function renderAdminColaboradores(el){
