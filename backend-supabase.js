@@ -101,12 +101,17 @@
 
     // -------- Empresas (tabela relacional; a RLS já entrega só o que o usuário pode ver) --------
     async getEmpresas() {
-      const { data, error } = await _sb.from('empresas').select('nome,fiscal_owner,ficha').order('nome');
+      const { data, error } = await _sb.from('empresas').select('nome,fiscal_owner,ficha,bancos').order('nome');
       if (error) throw error;
       return data || [];
     },
     async saveFicha(nome, ficha) {
       const { error } = await _sb.from('empresas').update({ ficha }).eq('nome', nome);
+      if (error) throw error;
+      return true;
+    },
+    async saveBancos(nome, bancos) {
+      const { error } = await _sb.from('empresas').update({ bancos }).eq('nome', nome);
       if (error) throw error;
       return true;
     },

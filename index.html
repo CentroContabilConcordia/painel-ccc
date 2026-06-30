@@ -11,8 +11,8 @@
      o adaptador atual. Para migrar para outro PostgreSQL no futuro, escreva
      um "backend-xxxx.js" com as mesmas funcoes e troque a linha abaixo. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=3"></script>
-<script src="backend-supabase.js?v=3"></script>
+<script src="config.js?v=4"></script>
+<script src="backend-supabase.js?v=4"></script>
 <!-- ===== fim camada de dados ===== -->
 
 <style>
@@ -668,18 +668,20 @@ async function loadFichas(){ /* as fichas vêm da tabela empresas, carregada em 
 // A segurança (RLS) já entrega só o que a pessoa logada pode ver.
 async function loadRef(){
   try{
-    const lista = await window.Backend.getEmpresas(); // [{nome, fiscal_owner, ficha}]
+    const lista = await window.Backend.getEmpresas(); // [{nome, fiscal_owner, ficha, bancos}]
     const byOwner = {cris:[],cleo:[],julia:[],gab:[]};
-    const todas = []; const f = {};
+    const todas = []; const f = {}; const bk = {};
     lista.forEach(e=>{
       todas.push(e.nome);
       if(e.fiscal_owner && byOwner[e.fiscal_owner]) byOwner[e.fiscal_owner].push(e.nome);
       if(e.ficha && Object.keys(e.ficha).length) f[e.nome] = e.ficha;
+      if(e.bancos && e.bancos.length) bk[e.nome] = e.bancos;
     });
     const fill=(arr,vals)=>{arr.length=0;vals.forEach(v=>arr.push(v));};
     fill(EMP_CRIS,byOwner.cris); fill(EMP_CLEO,byOwner.cleo); fill(EMP_JULIA,byOwner.julia);
     fill(TODAS_EMPRESAS, todas.sort((a,b)=>a.localeCompare(b,'pt')));
     fichas = f;
+    bancosCad = bk;
   }catch(e){console.warn('[CCC] loadRef falhou',e);}
 }
 async function saveFichas(){
@@ -690,13 +692,14 @@ async function saveFichas(){
     }
   }catch(e){console.warn('[CCC] saveFichas falhou',e);}
 }
-async function loadBancos(){
-  try{const r=await window.storage.get(SK_BANCOS,true);if(r&&r.value)bancosCad=JSON.parse(r.value);}
-  catch(e){try{const l=localStorage.getItem(SK_BANCOS);if(l)bancosCad=JSON.parse(l);}catch(e2){}}
-}
+async function loadBancos(){ /* os bancos vêm da tabela empresas, carregada em loadRef() */ }
 async function saveBancos(){
-  const p=JSON.stringify(bancosCad);
-  try{await window.storage.set(SK_BANCOS,p,true);}catch(e){try{localStorage.setItem(SK_BANCOS,p);}catch(e2){}}
+  // Salva os bancos da empresa atual na tabela protegida (isolado por empresa).
+  try{
+    if(typeof empresaAtual!=='undefined' && empresaAtual){
+      await window.Backend.saveBancos(empresaAtual, bancosCad[empresaAtual]||[]);
+    }
+  }catch(e){console.warn('[CCC] saveBancos falhou',e);}
 }
 async function loadDB(){
   try{const r=await window.storage.get(SK,true);if(r&&r.value){const d=JSON.parse(r.value);db=d.db||{};nextId=d.n||1;}}
@@ -1470,7 +1473,7 @@ function getBancos(emp){return bancosCad[emp]||[];}
 
 function renderBancos(col){
   const bancos=getBancos(empresaAtual);
-  const podeEditar=isGestora();
+  const podeEditar=true; // bancos: equipe também inclui/altera (só nas empresas dela)
   const mk=getMembroKey();
   const md=getMesData(setorAtual,mk,empresaAtual,mesAtual);
   const statusBancos=md.statusBancos||{};
@@ -1524,7 +1527,6 @@ function renderBancos(col){
 }
 
 async function adicionarBanco(){
-  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
   const nome=document.getElementById('b-nome')?.value.trim();
   if(!nome){toast('Informe o nome do banco','#d97706');return;}
   const agencia=document.getElementById('b-agencia')?.value.trim();
@@ -1537,7 +1539,6 @@ async function adicionarBanco(){
 }
 
 async function deletarBanco(bid){
-  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
   bancosCad[empresaAtual]=(bancosCad[empresaAtual]||[]).filter(b=>b.id!==bid);
   await saveBancos();
   renderTarefas();
