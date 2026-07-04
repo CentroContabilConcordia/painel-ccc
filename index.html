@@ -1190,7 +1190,7 @@ function gerarRelatorio(){
     if(t.status==='atrasado')empMap[t.empresa].atrasado++;
     if(t.status==='pendente')empMap[t.empresa].pendente++;
   });
-  const empsPend=Object.entries(empMap).filter(([,v])=>v.atrasado>0||v.ok<v.total).sort((a,b)=>b[1].atrasado-a[1].atrasado).slice(0,20);
+  const empsList=Object.entries(empMap).sort((a,b)=>{const pa=a[1].total?a[1].ok/a[1].total:0,pb=b[1].total?b[1].ok/b[1].total:0;return (b[1].atrasado-a[1].atrasado)||(pa-pb)||a[0].localeCompare(b[0],'pt');});
 
   // Por tarefa (desc)
   const porTarefa={};
@@ -1236,9 +1236,10 @@ function gerarRelatorio(){
   });
   html+=`</tbody></table></div>`;
 
-  if(empsPend.length>0){
-    html+=`<div class="rel-section"><div class="rel-section-title">Empresas com Pendências <span class="badge">${empsPend.length}</span></div><table class="rel-table"><thead><tr><th>Empresa</th><th>Total</th><th>Concluídas</th><th>Atrasadas</th><th>Pendentes</th><th>%</th></tr></thead><tbody>`;
-    empsPend.forEach(([emp,v])=>{
+  if(empsList.length>0){
+    const lblSt={pendente:'Pendentes',andamento:'Em andamento',aguardando:'Aguardando doc.',atrasado:'Atrasadas',concluido:'Concluídas',naoseaplica:'N/A'}[statusFiltro]||'';
+    html+=`<div class="rel-section"><div class="rel-section-title">Empresas${lblSt?' — '+lblSt:''} <span class="badge">${empsList.length}</span></div><table class="rel-table"><thead><tr><th>Empresa</th><th>Total</th><th>Concluídas</th><th>Atrasadas</th><th>Pendentes</th><th>%</th></tr></thead><tbody>`;
+    empsList.forEach(([emp,v])=>{
       const p=v.total>0?Math.round(v.ok/v.total*100):0;
       html+=`<tr><td>${emp}</td><td style="color:var(--muted)">${v.total}</td><td style="color:var(--green)">${v.ok}</td><td style="color:var(--red);font-weight:${v.atrasado>0?'700':'400'}">${v.atrasado}</td><td style="color:var(--yellow)">${v.pendente}</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="prog-mini"><div class="prog-mini-f" style="width:${p}%;background:var(--accent)"></div></div><span style="font-size:10px;color:var(--muted)">${p}%</span></div></td></tr>`;
     });
