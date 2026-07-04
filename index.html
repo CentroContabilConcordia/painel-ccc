@@ -381,6 +381,15 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
 
 .toast{position:fixed;bottom:18px;right:18px;background:var(--green);color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;transform:translateY(60px);opacity:0;transition:all .3s;box-shadow:var(--shadow-md);}
 .toast.show{transform:translateY(0);opacity:1;}
+.rel-btn-sec{background:var(--surface3)!important;color:var(--text)!important;}
+@media print{
+  header,.nav-wrap,.aviso-gab,.rel-filtros-card,.rel-acoes,#painel-operacional,#painel-admin,#painel-monitor,#login-screen{display:none!important;}
+  body{background:#fff!important;}
+  #painel-relatorios{display:block!important;}
+  .rel-wrap{padding:0!important;}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  @page{margin:12mm;}
+}
 </style>
 </head>
 <body>
@@ -491,6 +500,10 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
           <div class="rel-filtro-label">Empresa</div>
           <input class="rel-sel" id="rel-empresa" placeholder="Filtrar empresa..." style="font-size:12px;"/>
         </div>
+        <div class="rel-filtro-grupo">
+          <div class="rel-filtro-label">Regime</div>
+          <select class="rel-sel" id="rel-regime"><option value="todos">Todos</option></select>
+        </div>
       </div>
 
       <div class="tarefas-filtro-wrap">
@@ -502,8 +515,10 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
         <div class="tarefas-checkboxes" id="tarefas-checkboxes"></div>
       </div>
 
-      <div style="margin-top:14px;">
+      <div class="rel-acoes" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="rel-btn" onclick="gerarRelatorio()">📊 Gerar Relatório</button>
+        <button class="rel-btn rel-btn-sec" onclick="imprimirRelatorio()">🖨️ Imprimir / PDF</button>
+        <button class="rel-btn rel-btn-sec" onclick="exportarRelatorioCSV()">📥 Exportar Excel</button>
       </div>
     </div>
 
@@ -1087,6 +1102,12 @@ function initRelatorios(){
   const selPessoa=document.getElementById('rel-pessoa');
   selPessoa.innerHTML='<option value="todos">Todas</option>';
   TODOS_MEMBROS.forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.nome;selPessoa.appendChild(o);});
+  // Regimes existentes nas fichas (Simples Nacional, Lucro Presumido, etc.)
+  const selReg=document.getElementById('rel-regime');
+  if(selReg){
+    const regs=[...new Set(Object.values(fichas).map(f=>(f&&f.regime||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));
+    selReg.innerHTML='<option value="todos">Todos</option>'+regs.map(r=>`<option value="${r}">${r}</option>`).join('');
+  }
   renderCheckboxesTarefas();
   document.getElementById('rel-conteudo').innerHTML='<div class="vazio" style="padding:30px;text-align:center;">Selecione os filtros e clique em Gerar Relatório</div>';
 }
@@ -1132,6 +1153,7 @@ function gerarRelatorio(){
   const statusFiltro=document.getElementById('rel-status').value;
   const areaFiltro=document.getElementById('rel-area').value;
   const empresaFiltro=document.getElementById('rel-empresa').value.toLowerCase().trim();
+  const regimeFiltro=document.getElementById('rel-regime')?document.getElementById('rel-regime').value:'todos';
   const tarefasSel=getTarefasSelecionadas();
 
   let todasTarefas=[];
@@ -1143,6 +1165,7 @@ function gerarRelatorio(){
       const empLista=s==='fiscal'?(MEMBROS_FISCAL.find(x=>x.id===mk)?.empresas||[]):TODAS_EMPRESAS;
       empLista.forEach(emp=>{
         if(empresaFiltro&&!emp.toLowerCase().includes(empresaFiltro))return;
+        if(regimeFiltro!=='todos' && ((fichas[emp]&&fichas[emp].regime||'').trim()!==regimeFiltro))return;
         const md=getMesData(s,mk,emp,mes);
         if(md.tarefas.length>0){
           md.tarefas.forEach(t=>{
@@ -1246,7 +1269,31 @@ function gerarRelatorio(){
     html+=`</tbody></table></div>`;
   }
 
+  window._relData={empresas:empsList,porPessoa,mesLbl:mesLabel(mes),status:statusFiltro,regime:regimeFiltro};
   document.getElementById('rel-conteudo').innerHTML=html;
+}
+// ===== Imprimir e Exportar relatório =====
+function imprimirRelatorio(){
+  const c=document.getElementById('rel-conteudo');
+  if(!c.innerHTML.trim()||c.innerHTML.includes('Selecione os filtros')){toast('Gere o relatório primeiro','#d97706');return;}
+  window.print();
+}
+function exportarRelatorioCSV(){
+  const d=window._relData;
+  if(!d||!d.empresas||!d.empresas.length){toast('Gere o relatório primeiro','#d97706');return;}
+  const linhas=[['Empresa','Total','Concluidas','Atrasadas','Pendentes','%']];
+  d.empresas.forEach(([emp,v])=>{
+    const p=v.total>0?Math.round(v.ok/v.total*100):0;
+    linhas.push([emp,v.total,v.ok,v.atrasado||0,v.pendente||0,p+'%']);
+  });
+  const csv='﻿'+linhas.map(l=>l.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`relatorio_${(d.mesLbl||'').replace(/[^a-zA-Z0-9]/g,'_')}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('✓ Arquivo exportado! Abra no Excel.');
 }
 
 // AÇÕES
