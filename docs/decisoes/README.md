@@ -52,3 +52,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0006 — "Continuar conectada" (sessão persistente)](ADR-0006-continuar-conectada.md)
 - [ADR-0007 — Bancos isolados por empresa + equipe pode editar](ADR-0007-bancos-isolados-equipe.md)
 - [ADR-0008 — Painel de Monitoramento da gestora](ADR-0008-painel-monitoramento.md)
+- [ADR-0009 — Relatório mostra também as empresas concluídas](ADR-0009-relatorio-mostra-concluidas.md)
