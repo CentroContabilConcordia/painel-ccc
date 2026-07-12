@@ -55,3 +55,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0009 — Relatório mostra também as empresas concluídas](ADR-0009-relatorio-mostra-concluidas.md)
 - [ADR-0010 — Relatórios: filtro por Regime + Exportar/Imprimir](ADR-0010-relatorio-regime-export.md)
 - [ADR-0011 — Renomear empresa + Editar banco](ADR-0011-renomear-empresa-editar-banco.md)
+- [ADR-0012 — Central de gestão de empresas (Administração)](ADR-0012-central-gestao-empresas.md)
