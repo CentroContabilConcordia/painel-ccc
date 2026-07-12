@@ -120,6 +120,11 @@
       if (error) throw error;
       return true;
     },
+    async setFiscalOwner(nome, owner) {
+      const { error } = await _sb.from('empresas').update({ fiscal_owner: owner || null }).eq('nome', nome);
+      if (error) throw error;
+      return true;
+    },
     async addEmpresa(nome, fiscal_owner, ficha) {
       const { error } = await _sb.from('empresas').insert({ nome, fiscal_owner: fiscal_owner || null, ficha: ficha || {} });
       if (error) throw error;
