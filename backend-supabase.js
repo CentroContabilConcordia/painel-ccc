@@ -115,6 +115,11 @@
       if (error) throw error;
       return true;
     },
+    async renameEmpresa(oldNome, novoNome) {
+      const { error } = await _sb.from('empresas').update({ nome: novoNome }).eq('nome', oldNome);
+      if (error) throw error;
+      return true;
+    },
     async addEmpresa(nome, fiscal_owner, ficha) {
       const { error } = await _sb.from('empresas').insert({ nome, fiscal_owner: fiscal_owner || null, ficha: ficha || {} });
       if (error) throw error;

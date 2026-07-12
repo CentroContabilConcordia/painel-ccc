@@ -11,8 +11,8 @@
      o adaptador atual. Para migrar para outro PostgreSQL no futuro, escreva
      um "backend-xxxx.js" com as mesmas funcoes e troque a linha abaixo. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=4"></script>
-<script src="backend-supabase.js?v=4"></script>
+<script src="config.js?v=5"></script>
+<script src="backend-supabase.js?v=5"></script>
 <!-- ===== fim camada de dados ===== -->
 
 <style>
@@ -664,6 +664,7 @@ let fichas={};
 let empresasCad={}; // empresasCad[nome] = {setor, responsavelFiscal, responsavelContabil, ...dados ficha}
 let colaboradores={}; // colaboradores[id] = {nome, cargo, setor, email, dataEntrada, ativo, senha}  // fichas[empresa] = {cnpj, regime, anexo, cnae, respFiscal, respContabil, abertura, obs:[{id,texto}]}
 let bancosCad={}; // bancosCad[empresa] = [{id,nome,agencia,conta}]
+let _bancoEditando=null; // id do banco em edição (null = adicionando novo)
 async function loadEmpresasCad(){
   try{const r=await window.storage.get(SK_EMPRESAS_CAD,true);if(r&&r.value)empresasCad=JSON.parse(r.value);}
   catch(e){try{const l=localStorage.getItem(SK_EMPRESAS_CAD);if(l)empresasCad=JSON.parse(l);}catch(e2){}}
@@ -1486,6 +1487,7 @@ function renderFicha(col){
 
     ${podeEditar?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
       <button class="ficha-save-btn" onclick="salvarFicha()">💾 Salvar Ficha</button>
+      <button class="ficha-save-btn" style="background:var(--surface3);color:var(--text)" onclick="renomearEmpresa()">✏️ Renomear</button>
       <button class="ficha-save-btn" style="background:var(--red)" onclick="excluirEmpresaAtual()">🗑️ Excluir Empresa</button>
     </div>`:''}
   `;
@@ -1590,6 +1592,7 @@ function getBancos(emp){return bancosCad[emp]||[];}
 
 function renderBancos(col){
   const bancos=getBancos(empresaAtual);
+  _bancoEditando=null; // cada render limpo = não está editando
   const podeEditar=true; // bancos: equipe também inclui/altera (só nas empresas dela)
   const mk=getMembroKey();
   const md=getMesData(setorAtual,mk,empresaAtual,mesAtual);
@@ -1619,7 +1622,7 @@ function renderBancos(col){
             <option value="naoenviou"${st==='naoenviou'?' selected':''}>❌ Não enviou</option>
             <option value="naoseaplica"${st==='naoseaplica'?' selected':''}>— N/A</option>
           </select>
-          ${podeEditar?`<button class="banco-del" onclick="deletarBanco('${b.id}')">✕</button>`:''}
+          ${podeEditar?`<button class="banco-del" onclick="editarBanco('${b.id}')" title="Editar">✎</button><button class="banco-del" onclick="deletarBanco('${b.id}')" title="Remover">✕</button>`:''}
         </div>`;
     });
     bancosHtml+='</div>';
@@ -1649,6 +1652,12 @@ async function adicionarBanco(){
   const agencia=document.getElementById('b-agencia')?.value.trim();
   const conta=document.getElementById('b-conta')?.value.trim();
   if(!bancosCad[empresaAtual])bancosCad[empresaAtual]=[];
+  if(_bancoEditando){
+    const b=bancosCad[empresaAtual].find(x=>x.id===_bancoEditando);
+    if(b){ b.nome=nome; b.agencia=agencia; b.conta=conta; }
+    _bancoEditando=null;
+    await saveBancos(); renderTarefas(); toast('✓ Banco atualizado!'); return;
+  }
   bancosCad[empresaAtual].push({id:'b_'+Date.now(),nome,agencia,conta});
   await saveBancos();
   renderTarefas();
@@ -1660,6 +1669,18 @@ async function deletarBanco(bid){
   await saveBancos();
   renderTarefas();
   toast('Banco removido');
+}
+function editarBanco(bid){
+  const b=(bancosCad[empresaAtual]||[]).find(x=>x.id===bid);
+  if(!b)return;
+  _bancoEditando=bid;
+  const gn=id=>document.getElementById(id);
+  if(gn('b-nome'))gn('b-nome').value=b.nome||'';
+  if(gn('b-agencia'))gn('b-agencia').value=b.agencia||'';
+  if(gn('b-conta'))gn('b-conta').value=b.conta||'';
+  const btn=document.querySelector('.banco-add-btn'); if(btn)btn.textContent='💾 Salvar';
+  if(gn('b-nome'))gn('b-nome').focus();
+  toast('Edite os campos e clique em Salvar','#0891b2');
 }
 
 async function mudarStatusBanco(bid,val){
@@ -1806,6 +1827,26 @@ async function excluirEmpresaAtual(){
   empresaAtual=null;
   trocarView(viewAtual, document.querySelector('.nav-btn.active'));
   toast('Empresa excluída');
+}
+// Renomear a empresa atual — só gestora. Move junto as tarefas (chaveadas pelo nome).
+async function renomearEmpresa(){
+  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
+  const antigo=empresaAtual;
+  if(!antigo)return;
+  const resp=prompt('Novo nome da empresa:', antigo);
+  if(resp===null)return;
+  const nome=resp.trim();
+  if(!nome||nome===antigo)return;
+  if(TODAS_EMPRESAS.includes(nome)){toast('Já existe uma empresa com esse nome','#d97706');return;}
+  try{ await window.Backend.renameEmpresa(antigo, nome); }
+  catch(e){ toast('Erro ao renomear (nome já existe?)','#dc2626'); return; }
+  // move as tarefas que usam o nome antigo como chave (fiscal e contábil)
+  ['fiscal','contabil'].forEach(s=>{ if(db[s]) for(const mk in db[s]){ if(db[s][mk] && db[s][mk][antigo]){ db[s][mk][nome]=db[s][mk][antigo]; delete db[s][mk][antigo]; } } });
+  try{ await saveDB(); }catch(e){}
+  await loadRef();
+  empresaAtual=null;
+  trocarView(viewAtual, document.querySelector('.nav-btn.active'));
+  toast('✓ Nome alterado!');
 }
 
 function renderAdminColaboradores(el){
