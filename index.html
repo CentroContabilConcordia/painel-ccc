@@ -446,7 +446,8 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
         <div class="col2-titulo" id="col2-titulo">Selecione</div>
         <div class="col2-count" id="col2-count"></div>
       </div>
-      <div class="emp-search-wrap"><input id="emp-busca" placeholder="Buscar empresa..." oninput="buscarEmp(this.value)" autocomplete="off"/></div>
+      <div class="emp-search-wrap"><input id="emp-busca" placeholder="Buscar empresa..." oninput="buscarEmp(this.value)" autocomplete="off"/>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);margin-top:5px;cursor:pointer;"><input type="checkbox" id="chk-inativas" onchange="toggleMostrarInativas(this.checked)" style="cursor:pointer;"/> Mostrar inativas</label></div>
       <div class="emp-lista" id="emp-lista"><div class="vazio" style="padding:22px;">← Selecione</div></div>
     </div>
     <div class="col-tarefas" id="col-tarefas">
@@ -745,7 +746,7 @@ function getMeses(setor,mk,empresa){return Object.keys(db[setor]?.[mk]?.[empresa
 
 // ESTADO
 let usuarioAtual=null,setorAtual='fiscal',membroAtual=null,empresaAtual=null;
-let mesAtual=null,verHistorico=false,empFiltro='',viewAtual='fiscal';
+let mesAtual=null,verHistorico=false,empFiltro='',viewAtual='fiscal',mostrarInativas=false;
 let abaEmpresa='tarefas'; // 'tarefas' | 'ficha' | 'bancos'
 
 function mesKeyFn(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
@@ -914,13 +915,15 @@ function selecionarMembro(id){
 function renderEmpresasFiscal(){
   const m=MEMBROS_FISCAL.find(x=>x.id===membroAtual);if(!m)return;
   const el=document.getElementById('emp-lista');el.innerHTML='';
-  const lista=empFiltro?m.empresas.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):m.empresas;
+  let lista=empFiltro?m.empresas.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):m.empresas.slice();
+  if(!mostrarInativas)lista=lista.filter(empAtiva);
   if(lista.length===0){el.innerHTML='<div class="vazio">Nenhuma encontrada</div>';return;}
   lista.forEach(emp=>el.appendChild(criarEmpItem(emp,'fiscal',m.id,m.cor)));
 }
 function renderEmpresasContabil(){
   const el=document.getElementById('emp-lista');el.innerHTML='';
-  const lista=empFiltro?TODAS_EMPRESAS.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):TODAS_EMPRESAS;
+  let lista=empFiltro?TODAS_EMPRESAS.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):TODAS_EMPRESAS.slice();
+  if(!mostrarInativas)lista=lista.filter(empAtiva);
   if(lista.length===0){el.innerHTML='<div class="vazio">Nenhuma encontrada</div>';return;}
   lista.forEach(emp=>el.appendChild(criarEmpItem(emp,'contabil','contabil','#2563eb')));
 }
@@ -931,12 +934,13 @@ function criarEmpItem(emp,setor,mk,cor){
   const respM=responsavel?TODOS_MEMBROS.find(x=>x.id===responsavel):null;
   const div=document.createElement('div');div.className='emp-item'+(empresaAtual===emp?' active':'');
   div.addEventListener('click',()=>selecionarEmpresa(emp));
-  let html=`<div class="emp-nome"${temAtrasado?' style="color:var(--red)"':''}>${emp}${temAtrasado?' ⚠️':''}</div>`;
+  let html=`<div class="emp-nome"${temAtrasado?' style="color:var(--red)"':''}>${emp}${temAtrasado?' ⚠️':''}${!empAtiva(emp)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;">INATIVA</span>':''}</div>`;
   if(setor==='contabil'&&respM)html+=`<div class="emp-resp-tag">▶ ${respM.nome}</div>`;
   if(total>0)html+=`<div class="emp-meta"><span>${ok}/${total} ok</span><span>${pct}%</span></div><div class="emp-prog"><div class="emp-prog-f" style="width:${pct}%;background:${cor}"></div></div>`;
   div.innerHTML=html;return div;
 }
 function buscarEmp(val){empFiltro=val;if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();}
+function toggleMostrarInativas(v){mostrarInativas=v;if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();}
 function selecionarEmpresa(emp){
   empresaAtual=emp;verHistorico=false;abaEmpresa='ficha';
   if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();
@@ -1407,7 +1411,21 @@ function renderContatosHTML(contatos, podeEditar, ro) {
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',cnae:'',respFiscal:'',respContabil:'',abertura:'',obs:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',cnae:'',respFiscal:'',respContabil:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
+}
+// Empresa esta ativa a nao ser que a ficha diga ativo:false (padrao = ativa)
+function empAtiva(emp){const f=fichas[emp];return !f||f.ativo!==false;}
+async function toggleAtivaEmpresa(){
+  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
+  if(!empresaAtual)return;
+  const ativa=empAtiva(empresaAtual);
+  const ficha=getFicha(empresaAtual);
+  ficha.ativo=!ativa; // ativa -> inativa (false) ; inativa -> ativa (true)
+  fichas[empresaAtual]=ficha;
+  await saveFichas();
+  if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();
+  renderTarefas();
+  toast(ativa?'Empresa marcada como INATIVA':'Empresa REATIVADA');
 }
 
 function renderFicha(col){
@@ -1417,9 +1435,11 @@ function renderFicha(col){
   const dis=podeEditar?'':'disabled';
 
   const wrap=document.createElement('div');wrap.className='ficha-wrap';
+  const ativa=empAtiva(empresaAtual);
 
   // Dados fixos
   wrap.innerHTML=`
+    ${!ativa?'<div style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:600;">🔴 Empresa INATIVA — guardada no sistema, fora do dia a dia.</div>':''}
     <div class="ficha-section">
       <div class="ficha-section-titulo">Dados Cadastrais</div>
       <div class="ficha-grid">
@@ -1431,6 +1451,11 @@ function renderFicha(col){
         <div class="ficha-campo"><div class="ficha-label">Inscrição Municipal</div><input class="ficha-input" id="f-inscMunicipal" value="${ficha.inscMunicipal||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Telefone</div><input class="ficha-input" id="f-telefone" value="${ficha.telefone||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Município</div><input class="ficha-input" id="f-municipio" value="${ficha.municipio||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Endereço</div><input class="ficha-input" id="f-endereco" value="${ficha.endereco||''}" placeholder="Rua, número" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Complemento</div><input class="ficha-input" id="f-complemento" value="${ficha.complemento||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Bairro</div><input class="ficha-input" id="f-bairro" value="${ficha.bairro||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Estado (UF)</div><input class="ficha-input" id="f-estado" value="${ficha.estado||''}" placeholder="Ex: SC" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">CEP</div><input class="ficha-input" id="f-cep" value="${ficha.cep||''}" placeholder="00.000-000" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Responsável Fiscal</div>
           <select class="ficha-select" id="f-respFiscal" ${dis}>
             <option value="">— Selecione —</option>
@@ -1496,6 +1521,7 @@ function renderFicha(col){
     ${podeEditar?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
       <button class="ficha-save-btn" onclick="salvarFicha()">💾 Salvar Ficha</button>
       <button class="ficha-save-btn" style="background:var(--surface3);color:var(--text)" onclick="renomearEmpresa()">✏️ Renomear</button>
+      <button class="ficha-save-btn" style="background:var(--surface3);color:var(--text)" onclick="toggleAtivaEmpresa()">${ativa?'🔴 Inativar':'🟢 Reativar'}</button>
       <button class="ficha-save-btn" style="background:var(--red)" onclick="excluirEmpresaAtual()">🗑️ Excluir Empresa</button>
     </div>`:''}
   `;
@@ -1544,6 +1570,11 @@ async function salvarFicha(){
   ficha.inscMunicipal=document.getElementById('f-inscMunicipal')?.value||'';
   ficha.telefone=document.getElementById('f-telefone')?.value||'';
   ficha.municipio=document.getElementById('f-municipio')?.value||'';
+  ficha.endereco=document.getElementById('f-endereco')?.value||'';
+  ficha.complemento=document.getElementById('f-complemento')?.value||'';
+  ficha.bairro=document.getElementById('f-bairro')?.value||'';
+  ficha.estado=document.getElementById('f-estado')?.value||'';
+  ficha.cep=document.getElementById('f-cep')?.value||'';
   ficha.respFiscal=document.getElementById('f-respFiscal')?.value||'';
   ficha.respContabil=document.getElementById('f-respContabil')?.value||'';
   ficha.regime=document.getElementById('f-regime')?.value||'Simples Nacional';
@@ -1788,7 +1819,7 @@ function renderAdmEmpLista(){
       const own=ownerDe(e);
       const reg=(fichas[e]&&fichas[e].regime)||'—';
       return `<tr>
-        <td><b>${e}</b></td>
+        <td><b>${e}</b>${!empAtiva(e)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;">INATIVA</span>':''}</td>
         <td><select class="ficha-select" style="font-size:12px;padding:4px 6px;" onchange="admTrocarResp(${i},this.value)">
           ${MEMBROS_FISCAL.map(m=>`<option value="${m.id}"${own===m.id?' selected':''}>${m.nome}${m.licenca?' (licença)':''}</option>`).join('')}
         </select></td>
