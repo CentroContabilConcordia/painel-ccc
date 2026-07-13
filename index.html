@@ -384,9 +384,16 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
 .rel-btn-sec{background:var(--surface3)!important;color:var(--text)!important;}
 @media print{
   header,.nav-wrap,.aviso-gab,.rel-filtros-card,.rel-acoes,#painel-operacional,#painel-admin,#painel-monitor,#login-screen{display:none!important;}
-  body{background:#fff!important;}
-  #painel-relatorios{display:block!important;}
-  .rel-wrap{padding:0!important;}
+  body{background:#fff!important;min-height:0!important;}
+  /* Desfaz a altura fixa/rolagem: sem isso, o relatorio corta em 1 pagina */
+  html,body,.app{height:auto!important;max-height:none!important;overflow:visible!important;display:block!important;}
+  #painel-relatorios{display:block!important;height:auto!important;max-height:none!important;overflow:visible!important;}
+  .rel-wrap{padding:0!important;height:auto!important;max-height:none!important;overflow:visible!important;}
+  /* Deixa a tabela fluir por varias paginas sem cortar linha no meio */
+  .rel-section{page-break-inside:auto;break-inside:auto;}
+  .rel-table{page-break-inside:auto;break-inside:auto;}
+  .rel-table thead{display:table-header-group;}
+  .rel-table tr{page-break-inside:avoid;break-inside:avoid;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   @page{margin:12mm;}
 }

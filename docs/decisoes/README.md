@@ -56,3 +56,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0010 — Relatórios: filtro por Regime + Exportar/Imprimir](ADR-0010-relatorio-regime-export.md)
 - [ADR-0011 — Renomear empresa + Editar banco](ADR-0011-renomear-empresa-editar-banco.md)
 - [ADR-0012 — Central de gestão de empresas (Administração)](ADR-0012-central-gestao-empresas.md)
+- [ADR-0013 — Impressão do relatório em várias páginas](ADR-0013-impressao-relatorio-multipaginas.md)
