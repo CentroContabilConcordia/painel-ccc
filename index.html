@@ -1807,20 +1807,24 @@ function renderAdminEmpresas(el){
 }
 let _admFiltro='';
 let _admLista=[];
+let _admSoSemResp=false;
 function renderAdmEmpLista(){
   const el=document.getElementById('adm-emp-lista'); if(!el)return;
   const f=(_admFiltro||'').toLowerCase().trim();
-  const lista=TODAS_EMPRESAS.filter(e=>!f||e.toLowerCase().includes(f)).sort((a,b)=>a.localeCompare(b,'pt'));
-  _admLista=lista;
   const ownerDe=e=>EMP_CRIS.includes(e)?'cris':EMP_CLEO.includes(e)?'cleo':EMP_JULIA.includes(e)?'julia':EMP_GAB.includes(e)?'gab':'';
-  el.innerHTML=`<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${lista.length} empresa(s)</div>
+  let lista=TODAS_EMPRESAS.filter(e=>!f||e.toLowerCase().includes(f)).sort((a,b)=>a.localeCompare(b,'pt'));
+  const semRespTotal=TODAS_EMPRESAS.filter(e=>ownerDe(e)===''&&empAtiva(e)).length;
+  if(_admSoSemResp)lista=lista.filter(e=>ownerDe(e)==='');
+  _admLista=lista;
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;"><span style="font-size:11px;color:var(--muted);">${lista.length} empresa(s)</span>${semRespTotal>0?`<label style="font-size:11px;color:#b91c1c;cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" ${_admSoSemResp?'checked':''} onchange="_admSoSemResp=this.checked;renderAdmEmpLista();"/> Só sem responsável (${semRespTotal})</label>`:''}</div>
     <table class="admin-table"><thead><tr><th>Empresa</th><th>Responsável Fiscal</th><th>Regime</th><th style="text-align:right;">Ações</th></tr></thead><tbody>
     ${lista.map((e,i)=>{
       const own=ownerDe(e);
       const reg=(fichas[e]&&fichas[e].regime)||'—';
       return `<tr>
-        <td><b>${e}</b>${!empAtiva(e)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;">INATIVA</span>':''}</td>
+        <td><b>${e}</b>${!empAtiva(e)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;">INATIVA</span>':''}${own===''&&empAtiva(e)?' <span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;font-weight:600;">SEM RESP.</span>':''}</td>
         <td><select class="ficha-select" style="font-size:12px;padding:4px 6px;" onchange="admTrocarResp(${i},this.value)">
+          <option value=""${own===''?' selected':''}>— Sem responsável —</option>
           ${MEMBROS_FISCAL.map(m=>`<option value="${m.id}"${own===m.id?' selected':''}>${m.nome}${m.licenca?' (licença)':''}</option>`).join('')}
         </select></td>
         <td style="color:var(--muted)">${reg}</td>
