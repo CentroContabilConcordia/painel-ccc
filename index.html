@@ -1655,6 +1655,11 @@ function renderBancos(col){
             <div class="banco-nome">${b.nome}</div>
             <div class="banco-detalhe">${b.agencia?'Ag: '+b.agencia:''}${b.agencia&&b.conta?' · ':''}${b.conta?'Cc: '+b.conta:''}</div>
           </div>
+          <select class="banco-status-sel" onchange="mudarOrigemBanco('${b.id}',this.value)" title="Origem do extrato">
+            <option value=""${!b.origem?' selected':''}>❓ Origem?</option>
+            <option value="acesso"${b.origem==='acesso'?' selected':''}>🔑 Acesso</option>
+            <option value="cliente"${b.origem==='cliente'?' selected':''}>📩 Cliente envia</option>
+          </select>
           <select class="banco-status-sel" onchange="mudarStatusBanco('${b.id}',this.value)" style="color:${stCor}">
             <option value="pendente"${st==='pendente'?' selected':''}>⏳ Pendente</option>
             <option value="recebido"${st==='recebido'?' selected':''}>✅ Recebido</option>
@@ -1674,10 +1679,15 @@ function renderBancos(col){
       ${podeEditar?`
         <div style="margin-top:12px;">
           <div class="ficha-label" style="margin-bottom:6px;">Adicionar Banco</div>
-          <div class="banco-add-grid">
+          <div class="banco-add-grid" style="grid-template-columns:2fr 1fr 1fr 1.5fr auto;">
             <input class="banco-add-inp" id="b-nome" placeholder="Nome do banco"/>
             <input class="banco-add-inp" id="b-agencia" placeholder="Agência"/>
             <input class="banco-add-inp" id="b-conta" placeholder="Conta"/>
+            <select class="banco-add-inp" id="b-origem">
+              <option value="">Origem do extrato…</option>
+              <option value="acesso">🔑 Acesso (escritório)</option>
+              <option value="cliente">📩 Cliente envia</option>
+            </select>
             <button class="banco-add-btn" onclick="adicionarBanco()">+ Banco</button>
           </div>
         </div>`:''}
@@ -1690,14 +1700,15 @@ async function adicionarBanco(){
   if(!nome){toast('Informe o nome do banco','#d97706');return;}
   const agencia=document.getElementById('b-agencia')?.value.trim();
   const conta=document.getElementById('b-conta')?.value.trim();
+  const origem=document.getElementById('b-origem')?.value||'';
   if(!bancosCad[empresaAtual])bancosCad[empresaAtual]=[];
   if(_bancoEditando){
     const b=bancosCad[empresaAtual].find(x=>x.id===_bancoEditando);
-    if(b){ b.nome=nome; b.agencia=agencia; b.conta=conta; }
+    if(b){ b.nome=nome; b.agencia=agencia; b.conta=conta; b.origem=origem; }
     _bancoEditando=null;
     await saveBancos(); renderTarefas(); toast('✓ Banco atualizado!'); return;
   }
-  bancosCad[empresaAtual].push({id:'b_'+Date.now(),nome,agencia,conta});
+  bancosCad[empresaAtual].push({id:'b_'+Date.now(),nome,agencia,conta,origem});
   await saveBancos();
   renderTarefas();
   toast('✓ Banco adicionado!');
@@ -1717,9 +1728,19 @@ function editarBanco(bid){
   if(gn('b-nome'))gn('b-nome').value=b.nome||'';
   if(gn('b-agencia'))gn('b-agencia').value=b.agencia||'';
   if(gn('b-conta'))gn('b-conta').value=b.conta||'';
+  if(gn('b-origem'))gn('b-origem').value=b.origem||'';
   const btn=document.querySelector('.banco-add-btn'); if(btn)btn.textContent='💾 Salvar';
   if(gn('b-nome'))gn('b-nome').focus();
   toast('Edite os campos e clique em Salvar','#0891b2');
+}
+
+async function mudarOrigemBanco(bid,val){
+  const b=(bancosCad[empresaAtual]||[]).find(x=>x.id===bid);
+  if(!b)return;
+  b.origem=val;
+  await saveBancos();
+  renderTarefas();
+  toast(val==='acesso'?'🔑 Extrato por acesso do escritório':val==='cliente'?'📩 Extrato enviado pelo cliente':'Origem definida');
 }
 
 async function mudarStatusBanco(bid,val){

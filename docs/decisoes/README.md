@@ -58,3 +58,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0012 — Central de gestão de empresas (Administração)](ADR-0012-central-gestao-empresas.md)
 - [ADR-0013 — Impressão do relatório em várias páginas](ADR-0013-impressao-relatorio-multipaginas.md)
 - [ADR-0014 — Sincronização de empresas com o Questor (por CNPJ) + endereço + Ativa/Inativa](ADR-0014-sincronizacao-questor-cnpj.md)
+- [ADR-0015 — Origem do extrato em cada banco (Acesso × Cliente envia)](ADR-0015-origem-extrato-banco.md)
