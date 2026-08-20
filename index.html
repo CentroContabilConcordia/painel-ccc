@@ -841,7 +841,7 @@ function sair(){
 // INIT APP
 async function iniciarApp(){
   const u=USUARIOS[usuarioAtual];
-  const d=new Date();mesAtual=mesKeyFn(d);
+  const d=new Date();mesAtual=mesKeyFn(new Date(d.getFullYear(),d.getMonth()-1,1)); // padrao = mes anterior (competencia que a equipe esta trabalhando)
   document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${u.nome[0]}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
   const nav=document.getElementById('nav-wrap');nav.innerHTML='';
   if(isGestora()){
@@ -1137,7 +1137,7 @@ function initRelatorios(){
   for(let i=0;i<12;i++){
     const dt=new Date(d.getFullYear(),d.getMonth()-i,1);const k=mesKeyFn(dt);
     const opt=document.createElement('option');opt.value=k;opt.textContent=mesLabel(k);
-    if(i===0)opt.selected=true;selMes.appendChild(opt);
+    if(i===1)opt.selected=true;selMes.appendChild(opt); // padrao = mes anterior
   }
   const selPessoa=document.getElementById('rel-pessoa');
   selPessoa.innerHTML='<option value="todos">Todas</option>';
