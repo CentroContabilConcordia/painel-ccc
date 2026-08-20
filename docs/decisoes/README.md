@@ -61,3 +61,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0015 — Origem do extrato em cada banco (Acesso × Cliente envia)](ADR-0015-origem-extrato-banco.md)
 - [ADR-0016 — Relatório de Cadastro das Empresas (campos da ficha selecionáveis)](ADR-0016-relatorio-cadastro-empresas.md)
 - [ADR-0017 — Painel abre no mês anterior (competência)](ADR-0017-mes-padrao-anterior.md)
+- [ADR-0018 — Herança automática do "não se aplica" entre meses](ADR-0018-heranca-nao-se-aplica.md)

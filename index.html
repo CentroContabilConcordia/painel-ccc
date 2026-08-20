@@ -774,6 +774,22 @@ function setMesData(setor,mk,empresa,mes,data){
   db[setor][mk][empresa][mes]=data;
 }
 function getMeses(setor,mk,empresa){return Object.keys(db[setor]?.[mk]?.[empresa]||{}).sort().reverse();}
+// Herda o "nao se aplica" do mes anterior mais recente que tenha tarefas (caracteristica fixa da empresa).
+function statusNaAnterior(setor,mk,emp,mes){
+  const set=new Set();
+  const meses=getMeses(setor,mk,emp).filter(m=>m<mes); // ja vem do mais recente p/ o mais antigo
+  if(meses.length){
+    const md=getMesData(setor,mk,emp,meses[0]);
+    (md.tarefas||[]).forEach(t=>{ if(t.status==='naoseaplica') set.add(t.desc); });
+  }
+  return set;
+}
+// Monta as tarefas de um mes novo: 'pendente', mas ja marca 'nao se aplica' as herdadas do mes anterior.
+function novasTarefasMes(setor,mk,emp,mes){
+  const pad=setor==='fiscal'?PAD_FISCAL:PAD_CONTABIL;
+  const na=statusNaAnterior(setor,mk,emp,mes);
+  return pad.map(tp=>({id:nextId++,desc:tp.desc,area:tp.area,status:na.has(tp.desc)?'naoseaplica':'pendente'}));
+}
 
 // ESTADO
 let usuarioAtual=null,setorAtual='fiscal',membroAtual=null,empresaAtual=null;
@@ -973,8 +989,7 @@ function selecionarEmpresa(emp){
   if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();
   const mk=getMembroKey();const md=getMesData(setorAtual,mk,emp,mesAtual);
   if(md.tarefas.length===0){
-    const pad=setorAtual==='fiscal'?PAD_FISCAL:PAD_CONTABIL;
-    setMesData(setorAtual,mk,emp,mesAtual,{responsavel:setorAtual==='contabil'&&!isGestora()?usuarioAtual:null,tarefas:pad.map(tp=>({id:nextId++,desc:tp.desc,area:tp.area,status:'pendente'}))});
+    setMesData(setorAtual,mk,emp,mesAtual,{responsavel:setorAtual==='contabil'&&!isGestora()?usuarioAtual:null,tarefas:novasTarefasMes(setorAtual,mk,emp,mesAtual)});
     saveDB();
   }
   renderTarefas();
@@ -1435,7 +1450,7 @@ function navMes(dir){
   const[y,mo]=mesAtual.split('-').map(Number);const d=new Date(y,mo-1+dir,1);mesAtual=mesKeyFn(d);
   if(empresaAtual){
     const mk=getMembroKey();const md=getMesData(setorAtual,mk,empresaAtual,mesAtual);
-    if(md.tarefas.length===0){const pad=setorAtual==='fiscal'?PAD_FISCAL:PAD_CONTABIL;setMesData(setorAtual,mk,empresaAtual,mesAtual,{responsavel:null,tarefas:pad.map(tp=>({id:nextId++,desc:tp.desc,area:tp.area,status:'pendente'}))});saveDB();}
+    if(md.tarefas.length===0){setMesData(setorAtual,mk,empresaAtual,mesAtual,{responsavel:null,tarefas:novasTarefasMes(setorAtual,mk,empresaAtual,mesAtual)});saveDB();}
     if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();renderTarefas();
   }
 }
