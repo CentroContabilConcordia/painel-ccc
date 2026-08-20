@@ -389,6 +389,8 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
   html,body,.app{height:auto!important;max-height:none!important;overflow:visible!important;display:block!important;}
   #painel-relatorios{display:block!important;height:auto!important;max-height:none!important;overflow:visible!important;}
   .rel-wrap{padding:0!important;height:auto!important;max-height:none!important;overflow:visible!important;}
+  body.imp-cad #rel-conteudo{display:none!important;}
+  body.imp-task #rel-cad-wrap{display:none!important;}
   /* Deixa a tabela fluir por varias paginas sem cortar linha no meio */
   .rel-section{page-break-inside:auto;break-inside:auto;}
   .rel-table{page-break-inside:auto;break-inside:auto;}
@@ -526,6 +528,40 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
     </div>
 
     <div id="rel-conteudo"></div>
+
+    <div id="rel-cad-wrap">
+      <div class="rel-filtros-card rel-cad-card">
+        <div class="rel-filtros-titulo">📋 Cadastro das Empresas</div>
+        <div class="rel-filtros-grid">
+          <div class="rel-filtro-grupo">
+            <div class="rel-filtro-label">Responsável Fiscal</div>
+            <select class="rel-sel" id="relc-resp"><option value="todos">Todos</option></select>
+          </div>
+          <div class="rel-filtro-grupo">
+            <div class="rel-filtro-label">Regime</div>
+            <select class="rel-sel" id="relc-regime"><option value="todos">Todos</option></select>
+          </div>
+          <div class="rel-filtro-grupo">
+            <div class="rel-filtro-label">Empresa</div>
+            <input class="rel-sel" id="relc-empresa" placeholder="Filtrar empresa..." style="font-size:12px;"/>
+          </div>
+        </div>
+        <div class="tarefas-filtro-wrap">
+          <div class="tarefas-filtro-titulo">Informações da ficha (marque o que deve aparecer)</div>
+          <div class="tarefas-filtro-acoes">
+            <button class="tfiltro-btn" onclick="marcarCamposCad(true)">Marcar todos</button>
+            <button class="tfiltro-btn" onclick="marcarCamposCad(false)">Desmarcar todos</button>
+          </div>
+          <div class="tarefas-checkboxes" id="relc-campos"></div>
+        </div>
+        <div class="rel-acoes" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="rel-btn" onclick="gerarRelatorioCadastro()">📋 Gerar Cadastro</button>
+          <button class="rel-btn rel-btn-sec" onclick="imprimirRelatorioCadastro()">🖨️ Imprimir / PDF</button>
+          <button class="rel-btn rel-btn-sec" onclick="exportarRelatorioCadastroCSV()">📥 Exportar Excel</button>
+        </div>
+      </div>
+      <div id="rel-cad-conteudo"></div>
+    </div>
   </div>
 </div>
 
@@ -1114,6 +1150,13 @@ function initRelatorios(){
   }
   renderCheckboxesTarefas();
   document.getElementById('rel-conteudo').innerHTML='<div class="vazio" style="padding:30px;text-align:center;">Selecione os filtros e clique em Gerar Relatório</div>';
+  // Relatório de Cadastro das Empresas
+  const selResp=document.getElementById('relc-resp');
+  if(selResp) selResp.innerHTML='<option value="todos">Todos</option>'+MEMBROS_FISCAL.map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  const selRegC=document.getElementById('relc-regime');
+  if(selRegC){const regs=[...new Set(Object.values(fichas).map(f=>(f&&f.regime||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));selRegC.innerHTML='<option value="todos">Todos</option>'+regs.map(r=>`<option value="${r}">${r}</option>`).join('');}
+  renderCamposCad();
+  const rc=document.getElementById('rel-cad-conteudo'); if(rc) rc.innerHTML='';
 }
 
 function atualizarFiltros(){
@@ -1280,7 +1323,8 @@ function gerarRelatorio(){
 function imprimirRelatorio(){
   const c=document.getElementById('rel-conteudo');
   if(!c.innerHTML.trim()||c.innerHTML.includes('Selecione os filtros')){toast('Gere o relatório primeiro','#d97706');return;}
-  window.print();
+  document.body.classList.add('imp-task'); window.print();
+  setTimeout(()=>document.body.classList.remove('imp-task'),800);
 }
 function exportarRelatorioCSV(){
   const d=window._relData;
@@ -1297,6 +1341,92 @@ function exportarRelatorioCSV(){
   a.href=url; a.download=`relatorio_${(d.mesLbl||'').replace(/[^a-zA-Z0-9]/g,'_')}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
+  toast('✓ Arquivo exportado! Abra no Excel.');
+}
+
+// ===== Relatório de Cadastro das Empresas (ficha) =====
+const CAMPOS_CAD=[
+ {key:'cnpj',label:'CNPJ',def:true},
+ {key:'regime',label:'Regime',def:true},
+ {key:'municipio',label:'Município',def:true},
+ {key:'telefone',label:'Telefone',def:false},
+ {key:'endereco',label:'Endereço',def:false},
+ {key:'complemento',label:'Complemento',def:false},
+ {key:'bairro',label:'Bairro',def:false},
+ {key:'estado',label:'Estado',def:false},
+ {key:'cep',label:'CEP',def:false},
+ {key:'cnae',label:'CNAE',def:false},
+ {key:'natureza',label:'Natureza Jurídica',def:false},
+ {key:'inscEstadual',label:'Insc. Estadual',def:false},
+ {key:'inscMunicipal',label:'Insc. Municipal',def:false},
+ {key:'anexo',label:'Anexo Simples',def:false},
+ {key:'abertura',label:'Data de Abertura',def:false},
+ {key:'respFiscal',label:'Resp. Fiscal',def:false},
+ {key:'respContabil',label:'Resp. Contábil',def:false},
+];
+function renderCamposCad(){
+  const cont=document.getElementById('relc-campos'); if(!cont)return; cont.innerHTML='';
+  CAMPOS_CAD.forEach(c=>{
+    const id='cadchk_'+c.key;
+    const div=document.createElement('div'); div.className='tchk-item'+(c.def?' checked':'');
+    div.innerHTML=`<input type="checkbox" id="${id}" value="${c.key}" ${c.def?'checked':''} onchange="this.closest('.tchk-item').classList.toggle('checked',this.checked)"/><label for="${id}">${c.label}</label>`;
+    cont.appendChild(div);
+  });
+}
+function marcarCamposCad(sel){
+  document.querySelectorAll('#relc-campos input[type=checkbox]').forEach(chk=>{chk.checked=sel;chk.closest('.tchk-item').classList.toggle('checked',sel);});
+}
+function getCamposCadSelecionados(){
+  const set=[]; document.querySelectorAll('#relc-campos input[type=checkbox]:checked').forEach(chk=>set.push(chk.value));
+  return CAMPOS_CAD.filter(c=>set.includes(c.key));
+}
+function donoFiscalDe(emp){
+  const id=EMP_CRIS.includes(emp)?'cris':EMP_CLEO.includes(emp)?'cleo':EMP_JULIA.includes(emp)?'julia':EMP_GAB.includes(emp)?'gab':'';
+  const m=TODOS_MEMBROS.find(x=>x.id===id); return m?m.nome:'';
+}
+function valorCampoCad(emp,key){
+  const f=fichas[emp]||{};
+  if(key==='respFiscal') return donoFiscalDe(emp);
+  if(key==='respContabil'){const m=TODOS_MEMBROS.find(x=>x.id===f.respContabil);return m?m.nome:'';}
+  return f[key]||'';
+}
+function gerarRelatorioCadastro(){
+  const resp=document.getElementById('relc-resp').value;
+  const regime=document.getElementById('relc-regime').value;
+  const busca=document.getElementById('relc-empresa').value.toLowerCase().trim();
+  const cols=getCamposCadSelecionados();
+  let lista;
+  if(resp!=='todos'){const m=MEMBROS_FISCAL.find(x=>x.id===resp);lista=m?m.empresas.slice():[];}
+  else lista=TODAS_EMPRESAS.slice();
+  lista=lista.filter(emp=>{
+    if(busca && !emp.toLowerCase().includes(busca)) return false;
+    if(regime!=='todos' && ((fichas[emp]&&fichas[emp].regime||'').trim()!==regime)) return false;
+    return true;
+  }).sort((a,b)=>a.localeCompare(b,'pt'));
+  const alvo=document.getElementById('rel-cad-conteudo');
+  if(lista.length===0){alvo.innerHTML='<div class="vazio" style="padding:30px;text-align:center;">Nenhuma empresa encontrada para os filtros.</div>';window._relCadData=null;return;}
+  let html=`<div class="rel-section"><div class="rel-section-title">Cadastro das Empresas <span class="badge">${lista.length}</span></div><div style="overflow-x:auto;"><table class="rel-table"><thead><tr><th>Empresa</th>${cols.map(c=>`<th>${c.label}</th>`).join('')}</tr></thead><tbody>`;
+  lista.forEach(emp=>{html+=`<tr><td>${emp}</td>${cols.map(c=>`<td>${valorCampoCad(emp,c.key)||'—'}</td>`).join('')}</tr>`;});
+  html+=`</tbody></table></div></div>`;
+  alvo.innerHTML=html;
+  window._relCadData={lista,cols};
+}
+function imprimirRelatorioCadastro(){
+  const c=document.getElementById('rel-cad-conteudo');
+  if(!c.innerHTML.trim()||c.innerHTML.includes('Nenhuma empresa')){toast('Gere o cadastro primeiro','#d97706');return;}
+  document.body.classList.add('imp-cad'); window.print();
+  setTimeout(()=>document.body.classList.remove('imp-cad'),800);
+}
+function exportarRelatorioCadastroCSV(){
+  const d=window._relCadData;
+  if(!d||!d.lista||!d.lista.length){toast('Gere o cadastro primeiro','#d97706');return;}
+  const linhas=[['Empresa',...d.cols.map(c=>c.label)]];
+  d.lista.forEach(emp=>{linhas.push([emp,...d.cols.map(c=>valorCampoCad(emp,c.key))]);});
+  const csv='﻿'+linhas.map(l=>l.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='cadastro_empresas.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   toast('✓ Arquivo exportado! Abra no Excel.');
 }
 
