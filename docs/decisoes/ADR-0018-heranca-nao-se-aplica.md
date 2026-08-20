@@ -20,6 +20,12 @@ com dados. Regras:
   na hora.
 - Vale para **fiscal e contábil**, em todos os meses seguintes.
 
+**Complemento (visibilidade):** as tarefas marcadas "não se aplica" ficam **ocultas**
+na lista de tarefas (a equipe vê só o que vale para a empresa). Um botão **"👁️ Mostrar
+não se aplica (N)"** revela as ocultas quando preciso — aí é só mudar o status para
+**incluir** de volta. O contador "N/A" na faixa continua visível. Áreas que só têm
+N/A somem da lista enquanto ocultas.
+
 ## Consequências técnicas
 - `index.html`: `statusNaAnterior()` (lê o N/A do mês anterior) + `novasTarefasMes()`
   (monta as tarefas já com o N/A herdado). Usadas nos 2 pontos que criam tarefas

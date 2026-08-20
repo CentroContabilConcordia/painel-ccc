@@ -793,7 +793,7 @@ function novasTarefasMes(setor,mk,emp,mes){
 
 // ESTADO
 let usuarioAtual=null,setorAtual='fiscal',membroAtual=null,empresaAtual=null;
-let mesAtual=null,verHistorico=false,empFiltro='',viewAtual='fiscal',mostrarInativas=false;
+let mesAtual=null,verHistorico=false,empFiltro='',viewAtual='fiscal',mostrarInativas=false,mostrarNA=false;
 let abaEmpresa='tarefas'; // 'tarefas' | 'ficha' | 'bancos'
 
 function mesKeyFn(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
@@ -1041,14 +1041,22 @@ function renderTarefas(){
   strip.innerHTML=`<div class="strip-item"><div class="strip-num" style="color:var(--yellow)">${counts.pendente}</div><div class="strip-label">Pendente</div></div><div class="strip-item"><div class="strip-num" style="color:var(--blue)">${counts.andamento}</div><div class="strip-label">Andamento</div></div><div class="strip-item"><div class="strip-num" style="color:var(--teal)">${counts.aguardando}</div><div class="strip-label">Aguard.</div></div><div class="strip-item"><div class="strip-num" style="color:var(--red)">${counts.atrasado}</div><div class="strip-label">Atrasado</div></div><div class="strip-item"><div class="strip-num" style="color:var(--green)">${counts.concluido}</div><div class="strip-label">Concluído</div></div><div class="strip-item"><div class="strip-num" style="color:var(--muted)">${counts.naoseaplica}</div><div class="strip-label">N/A</div></div>`;
   col.appendChild(strip);
 
+  if(counts.naoseaplica>0){
+    const tg=document.createElement('div');tg.style='display:flex;justify-content:flex-end;margin:4px 0 0;';
+    tg.innerHTML=`<button class="hist-btn" style="font-size:11px;padding:3px 9px;" onclick="toggleMostrarNA()">${mostrarNA?'🙈 Ocultar não se aplica':'👁️ Mostrar não se aplica ('+counts.naoseaplica+')'}</button>`;
+    col.appendChild(tg);
+  }
+
   const grupos={};tarefas.forEach(t=>{if(!grupos[t.area])grupos[t.area]=[];grupos[t.area].push(t);});
   const wrap=document.createElement('div');wrap.className='secao-wrap';
   Object.entries(grupos).forEach(([area,itens])=>{
-    const okA=itens.filter(t=>t.status==='concluido'||t.status==='naoseaplica').length;
+    const vis=mostrarNA?itens:itens.filter(t=>t.status!=='naoseaplica');
+    if(vis.length===0)return; // esconde a área inteira se só tem "não se aplica"
+    const okA=vis.filter(t=>t.status==='concluido'||t.status==='naoseaplica').length;
     const sh=document.createElement('div');sh.className='secao-header';
-    sh.innerHTML=`<div class="secao-tit">${area}</div><div class="secao-cnt">${okA}/${itens.length}</div>`;
+    sh.innerHTML=`<div class="secao-tit">${area}</div><div class="secao-cnt">${okA}/${vis.length}</div>`;
     wrap.appendChild(sh);
-    itens.forEach(t=>{
+    vis.forEach(t=>{
       const sCor={pendente:'var(--yellow)',andamento:'var(--blue)',aguardando:'var(--teal)',atrasado:'var(--red)',concluido:'var(--green)',naoseaplica:'var(--muted)'}[t.status]||'var(--muted)';
       const item=document.createElement('div');item.className='t-item';
       item.innerHTML=`<div class="t-chk ${t.status==='concluido'?'ok':''}" onclick="toggleT(${t.id})"></div><div class="t-nome ${t.status==='concluido'||t.status==='naoseaplica'?'riscado':''}">${t.desc}</div><div class="t-actions"><select class="t-sel" onchange="mudarStatus(${t.id},this.value)" style="color:${sCor}"><option value="pendente"${t.status==='pendente'?' selected':''}>Pendente</option><option value="andamento"${t.status==='andamento'?' selected':''}>Em andamento</option><option value="aguardando"${t.status==='aguardando'?' selected':''}>Aguardando doc.</option><option value="atrasado"${t.status==='atrasado'?' selected':''}>Atrasado</option><option value="concluido"${t.status==='concluido'?' selected':''}>Concluído</option><option value="naoseaplica"${t.status==='naoseaplica'?' selected':''}>Não se aplica</option></select>${isGestora()?`<button class="t-del" onclick="deletarT(${t.id})" title="Remover">✕</button>`:''}</div>`;
@@ -1062,6 +1070,8 @@ function renderTarefas(){
   }
   col.appendChild(wrap);
 }
+
+function toggleMostrarNA(){ mostrarNA=!mostrarNA; renderTarefas(); }
 
 function renderHistorico(col,cor){
   const mk=getMembroKey();const meses=getMeses(setorAtual,mk,empresaAtual);
