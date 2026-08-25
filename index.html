@@ -389,8 +389,9 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
   html,body,.app{height:auto!important;max-height:none!important;overflow:visible!important;display:block!important;}
   #painel-relatorios{display:block!important;height:auto!important;max-height:none!important;overflow:visible!important;}
   .rel-wrap{padding:0!important;height:auto!important;max-height:none!important;overflow:visible!important;}
-  body.imp-cad #rel-conteudo{display:none!important;}
-  body.imp-task #rel-cad-wrap{display:none!important;}
+  body.imp-task #rel-cad-wrap, body.imp-task #rel-banco-wrap{display:none!important;}
+  body.imp-cad #rel-conteudo, body.imp-cad #rel-banco-wrap{display:none!important;}
+  body.imp-banco #rel-conteudo, body.imp-banco #rel-cad-wrap{display:none!important;}
   /* Deixa a tabela fluir por varias paginas sem cortar linha no meio */
   .rel-section{page-break-inside:auto;break-inside:auto;}
   .rel-table{page-break-inside:auto;break-inside:auto;}
@@ -561,6 +562,40 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
         </div>
       </div>
       <div id="rel-cad-conteudo"></div>
+    </div>
+
+    <div id="rel-banco-wrap">
+      <div class="rel-filtros-card rel-banco-card">
+        <div class="rel-filtros-titulo">🏦 Bancos Cadastrados</div>
+        <div class="rel-filtros-grid">
+          <div class="rel-filtro-grupo">
+            <div class="rel-filtro-label">Responsável Fiscal</div>
+            <select class="rel-sel" id="relb-resp"><option value="todos">Todos</option></select>
+          </div>
+          <div class="rel-filtro-grupo">
+            <div class="rel-filtro-label">Regime</div>
+            <select class="rel-sel" id="relb-regime"><option value="todos">Todos</option></select>
+          </div>
+          <div class="rel-filtro-grupo">
+            <div class="rel-filtro-label">Empresa</div>
+            <input class="rel-sel" id="relb-empresa" placeholder="Filtrar empresa..." style="font-size:12px;"/>
+          </div>
+        </div>
+        <div class="tarefas-filtro-wrap">
+          <div class="tarefas-filtro-titulo">Dados do banco (marque o que deve aparecer)</div>
+          <div class="tarefas-filtro-acoes">
+            <button class="tfiltro-btn" onclick="marcarCamposBanco(true)">Marcar todos</button>
+            <button class="tfiltro-btn" onclick="marcarCamposBanco(false)">Desmarcar todos</button>
+          </div>
+          <div class="tarefas-checkboxes" id="relb-campos"></div>
+        </div>
+        <div class="rel-acoes" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="rel-btn" onclick="gerarRelatorioBancos()">🏦 Gerar Bancos</button>
+          <button class="rel-btn rel-btn-sec" onclick="imprimirRelatorioBancos()">🖨️ Imprimir / PDF</button>
+          <button class="rel-btn rel-btn-sec" onclick="exportarRelatorioBancosCSV()">📥 Exportar Excel</button>
+        </div>
+      </div>
+      <div id="rel-banco-conteudo"></div>
     </div>
   </div>
 </div>
@@ -1182,6 +1217,13 @@ function initRelatorios(){
   if(selRegC){const regs=[...new Set(Object.values(fichas).map(f=>(f&&f.regime||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));selRegC.innerHTML='<option value="todos">Todos</option>'+regs.map(r=>`<option value="${r}">${r}</option>`).join('');}
   renderCamposCad();
   const rc=document.getElementById('rel-cad-conteudo'); if(rc) rc.innerHTML='';
+  // Relatório de Bancos Cadastrados
+  const selRespB=document.getElementById('relb-resp');
+  if(selRespB) selRespB.innerHTML='<option value="todos">Todos</option>'+MEMBROS_FISCAL.map(m=>`<option value="${m.id}">${m.nome}</option>`).join('');
+  const selRegB=document.getElementById('relb-regime');
+  if(selRegB){const regs=[...new Set(Object.values(fichas).map(f=>(f&&f.regime||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'));selRegB.innerHTML='<option value="todos">Todos</option>'+regs.map(r=>`<option value="${r}">${r}</option>`).join('');}
+  renderCamposBanco();
+  const rb2=document.getElementById('rel-banco-conteudo'); if(rb2) rb2.innerHTML='';
 }
 
 function atualizarFiltros(){
@@ -1451,6 +1493,78 @@ function exportarRelatorioCadastroCSV(){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='cadastro_empresas.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('✓ Arquivo exportado! Abra no Excel.');
+}
+
+// ===== Relatório de Bancos Cadastrados =====
+const CAMPOS_BANCO=[
+ {key:'agencia',label:'Agência',def:true},
+ {key:'conta',label:'Conta',def:true},
+ {key:'origem',label:'Origem do extrato',def:true},
+];
+function renderCamposBanco(){
+  const cont=document.getElementById('relb-campos'); if(!cont)return; cont.innerHTML='';
+  CAMPOS_BANCO.forEach(c=>{
+    const id='bcochk_'+c.key;
+    const div=document.createElement('div'); div.className='tchk-item'+(c.def?' checked':'');
+    div.innerHTML=`<input type="checkbox" id="${id}" value="${c.key}" ${c.def?'checked':''} onchange="this.closest('.tchk-item').classList.toggle('checked',this.checked)"/><label for="${id}">${c.label}</label>`;
+    cont.appendChild(div);
+  });
+}
+function marcarCamposBanco(sel){
+  document.querySelectorAll('#relb-campos input[type=checkbox]').forEach(chk=>{chk.checked=sel;chk.closest('.tchk-item').classList.toggle('checked',sel);});
+}
+function getCamposBancoSelecionados(){
+  const set=[]; document.querySelectorAll('#relb-campos input[type=checkbox]:checked').forEach(chk=>set.push(chk.value));
+  return CAMPOS_BANCO.filter(c=>set.includes(c.key));
+}
+function valorCampoBanco(b,key){
+  if(key==='origem') return b.origem==='acesso'?'Acesso (escritório)':b.origem==='cliente'?'Cliente envia':'';
+  return b[key]||'';
+}
+function gerarRelatorioBancos(){
+  const resp=document.getElementById('relb-resp').value;
+  const regime=document.getElementById('relb-regime').value;
+  const busca=document.getElementById('relb-empresa').value.toLowerCase().trim();
+  const cols=getCamposBancoSelecionados();
+  let lista;
+  if(resp!=='todos'){const m=MEMBROS_FISCAL.find(x=>x.id===resp);lista=m?m.empresas.slice():[];}
+  else lista=TODAS_EMPRESAS.slice();
+  lista=lista.filter(emp=>{
+    if(busca && !emp.toLowerCase().includes(busca)) return false;
+    if(regime!=='todos' && ((fichas[emp]&&fichas[emp].regime||'').trim()!==regime)) return false;
+    return true;
+  }).sort((a,b)=>a.localeCompare(b,'pt'));
+  const rows=[]; let empComBanco=0;
+  lista.forEach(emp=>{
+    const bancos=bancosCad[emp]||[];
+    if(bancos.length) empComBanco++;
+    bancos.forEach(b=>{ rows.push({emp,nome:b.nome||'',vals:cols.map(c=>valorCampoBanco(b,c.key))}); });
+  });
+  const alvo=document.getElementById('rel-banco-conteudo');
+  if(rows.length===0){alvo.innerHTML='<div class="vazio" style="padding:30px;text-align:center;">Nenhum banco cadastrado para os filtros.</div>';window._relBancoData=null;return;}
+  let html=`<div class="rel-section"><div class="rel-section-title">Bancos Cadastrados <span class="badge">${rows.length} banco(s) · ${empComBanco} empresa(s)</span></div><div style="overflow-x:auto;"><table class="rel-table"><thead><tr><th>Empresa</th><th>Banco</th>${cols.map(c=>`<th>${c.label}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach(r=>{html+=`<tr><td>${r.emp}</td><td>${r.nome||'—'}</td>${r.vals.map(v=>`<td>${v||'—'}</td>`).join('')}</tr>`;});
+  html+=`</tbody></table></div></div>`;
+  alvo.innerHTML=html;
+  window._relBancoData={rows,cols};
+}
+function imprimirRelatorioBancos(){
+  const c=document.getElementById('rel-banco-conteudo');
+  if(!c.innerHTML.trim()||c.innerHTML.includes('Nenhum banco')){toast('Gere o relatório primeiro','#d97706');return;}
+  document.body.classList.add('imp-banco'); window.print();
+  setTimeout(()=>document.body.classList.remove('imp-banco'),800);
+}
+function exportarRelatorioBancosCSV(){
+  const d=window._relBancoData;
+  if(!d||!d.rows||!d.rows.length){toast('Gere o relatório primeiro','#d97706');return;}
+  const linhas=[['Empresa','Banco',...d.cols.map(c=>c.label)]];
+  d.rows.forEach(r=>{linhas.push([r.emp,r.nome,...r.vals]);});
+  const csv='﻿'+linhas.map(l=>l.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='bancos_cadastrados.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   toast('✓ Arquivo exportado! Abra no Excel.');
 }
