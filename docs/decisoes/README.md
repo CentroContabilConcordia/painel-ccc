@@ -65,3 +65,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0019 — Relatório de Bancos Cadastrados](ADR-0019-relatorio-bancos.md)
 - [ADR-0020 — Saída da Cristiane e entrada da Tati (nova divisão fiscal)](ADR-0020-troca-cristiane-tati.md)
 - [ADR-0021 — Aba "Processos Questor" (manual de procedimentos da equipe)](ADR-0021-processos-questor.md)
+- [ADR-0022 — Imagens nos Processos e nas Observações (Supabase Storage)](ADR-0022-imagens-storage.md)

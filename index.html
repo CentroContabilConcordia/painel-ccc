@@ -736,7 +736,7 @@ const SK_EMPRESAS_CAD='ccc_empresas_v1';
 const SK_COLAB='ccc_colab_v1';
 const SK_BANCOS='ccc_bancos_v1';
 const SK_PROCESSOS='ccc_processos_v1';
-let processos=[]; let _procFiltro=''; let _procEditando=null;
+let processos=[]; let _procFiltro=''; let _procEditando=null; let _procImgs=[]; let _obsNovaImgs=[];
 let db={};let nextId=1;
 let fichas={};
 let empresasCad={}; // empresasCad[nome] = {setor, responsavelFiscal, responsavelContabil, ...dados ficha}
@@ -1038,7 +1038,7 @@ function criarEmpItem(emp,setor,mk,cor){
 function buscarEmp(val){empFiltro=val;if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();}
 function toggleMostrarInativas(v){mostrarInativas=v;if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();}
 function selecionarEmpresa(emp){
-  empresaAtual=emp;verHistorico=false;abaEmpresa='ficha';
+  empresaAtual=emp;verHistorico=false;abaEmpresa='ficha';_obsNovaImgs=[];
   if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();
   const mk=getMembroKey();const md=getMesData(setorAtual,mk,emp,mesAtual);
   if(md.tarefas.length===0){
@@ -1590,6 +1590,33 @@ function exportarRelatorioBancosCSV(){
 // ===== Processos Questor (manual da equipe) =====
 function _escP(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function _escAttrP(s){return _escP(s).replace(/"/g,'&quot;');}
+// ---- Upload de imagens (Supabase Storage, bucket 'imagens') ----
+async function comprimirImagem(file){
+  return new Promise((resolve)=>{
+    try{
+      if(!/^image\//.test(file.type)) return resolve(file);
+      const img=new Image(); const url=URL.createObjectURL(file);
+      img.onload=()=>{
+        const maxDim=1500; let w=img.width,h=img.height;
+        if(Math.max(w,h)>maxDim){const r=maxDim/Math.max(w,h);w=Math.round(w*r);h=Math.round(h*r);}
+        const c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        c.toBlob(b=>{URL.revokeObjectURL(url);resolve(b||file);},'image/jpeg',0.72);
+      };
+      img.onerror=()=>{URL.revokeObjectURL(url);resolve(file);};
+      img.src=url;
+    }catch(e){resolve(file);}
+  });
+}
+async function uploadImagem(file, pasta){
+  if(!window._sb) throw new Error('sem conexão');
+  const blob=await comprimirImagem(file);
+  const nome=pasta+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,8)+'.jpg';
+  const {error}=await window._sb.storage.from('imagens').upload(nome, blob, {contentType:'image/jpeg',upsert:false});
+  if(error) throw error;
+  const {data}=window._sb.storage.from('imagens').getPublicUrl(nome);
+  return data.publicUrl;
+}
 function renderProcessos(){
   const el=document.getElementById('painel-processos'); if(!el)return;
   let form='';
@@ -1601,6 +1628,10 @@ function renderProcessos(){
         <input class="ficha-input" id="proc-titulo" placeholder="Título (ex.: Importar XML de NF-e)" value="${_escAttrP(p.titulo)}"/>
         <input class="ficha-input" id="proc-categoria" placeholder="Categoria (ex.: Fiscal, Folha, Cadastro)" value="${_escAttrP(p.categoria||'')}"/>
         <textarea class="ficha-input" id="proc-passos" rows="10" placeholder="Passo a passo — uma linha por passo...">${_escP(p.passos||'')}</textarea>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label class="rel-btn rel-btn-sec" style="cursor:pointer;margin:0;">📷 Adicionar imagem<input type="file" accept="image/*" style="display:none" onchange="anexarImgProc(this)"/></label>
+          <span id="proc-imgs" style="display:flex;flex-wrap:wrap;gap:6px;"></span>
+        </div>
         <div style="display:flex;gap:8px;">
           <button class="rel-btn" onclick="salvarProcesso()">💾 Salvar</button>
           <button class="rel-btn rel-btn-sec" onclick="cancelarProcesso()">Cancelar</button>
@@ -1619,6 +1650,17 @@ function renderProcessos(){
     ${form}
     <div id="proc-lista"></div>`;
   renderProcListaSomente();
+  if(_procEditando)renderProcImgs();
+}
+function renderProcImgs(){
+  const el=document.getElementById('proc-imgs'); if(!el)return;
+  el.innerHTML=_procImgs.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" style="max-width:80px;max-height:80px;border-radius:6px;border:1px solid var(--border);"/><button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="_procImgs.splice(${ix},1);renderProcImgs()" title="Remover">✕</button></span>`).join('');
+}
+async function anexarImgProc(input){
+  const f=input.files&&input.files[0]; if(!f)return; input.value='';
+  toast('Enviando imagem...');
+  try{ const url=await uploadImagem(f,'processos'); _procImgs.push(url); renderProcImgs(); toast('✓ Imagem pronta'); }
+  catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar imagem (o espaço de imagens já foi criado no Supabase?)','#dc2626'); }
 }
 function renderProcListaSomente(){
   const cont=document.getElementById('proc-lista'); if(!cont)return;
@@ -1636,11 +1678,12 @@ function renderProcListaSomente(){
       <button class="btn-danger" onclick="excluirProcesso('${p.id}')" title="Excluir">🗑️</button>
     </div>
     <div style="white-space:pre-wrap;font-size:13px;color:var(--text2);margin-top:8px;line-height:1.65;">${_escP(p.passos)||'<span style="color:var(--muted)">(sem passos)</span>'}</div>
+    ${(p.imagens&&p.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">${p.imagens.map(u=>`<img src="${u}" loading="lazy" style="max-width:220px;max-height:220px;border-radius:8px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/>`).join('')}</div>`:''}
   </div>`).join('');
 }
-function novoProcesso(){ _procEditando='novo'; renderProcessos(); document.getElementById('proc-titulo')?.focus(); }
-function editarProcesso(id){ _procEditando=id; renderProcessos(); }
-function cancelarProcesso(){ _procEditando=null; renderProcessos(); }
+function novoProcesso(){ _procEditando='novo'; _procImgs=[]; renderProcessos(); document.getElementById('proc-titulo')?.focus(); }
+function editarProcesso(id){ _procEditando=id; const p=processos.find(x=>x.id===id); _procImgs=[...((p&&p.imagens)||[])]; renderProcessos(); }
+function cancelarProcesso(){ _procEditando=null; _procImgs=[]; renderProcessos(); }
 async function salvarProcesso(){
   const titulo=(document.getElementById('proc-titulo')?.value||'').trim();
   if(!titulo){toast('Informe o título do processo','#d97706');return;}
@@ -1648,11 +1691,11 @@ async function salvarProcesso(){
   const passos=document.getElementById('proc-passos')?.value||'';
   if(_procEditando && _procEditando!=='novo'){
     const p=processos.find(x=>x.id===_procEditando);
-    if(p){ p.titulo=titulo; p.categoria=categoria; p.passos=passos; p.atualizadoEm=Date.now(); }
+    if(p){ p.titulo=titulo; p.categoria=categoria; p.passos=passos; p.imagens=_procImgs.slice(); p.atualizadoEm=Date.now(); }
   } else {
-    processos.push({id:'p_'+Date.now(),titulo,categoria,passos,criadoPor:usuarioAtual,atualizadoEm:Date.now()});
+    processos.push({id:'p_'+Date.now(),titulo,categoria,passos,imagens:_procImgs.slice(),criadoPor:usuarioAtual,atualizadoEm:Date.now()});
   }
-  _procEditando=null;
+  _procEditando=null; _procImgs=[];
   await saveProcessos();
   renderProcessos();
   toast('✓ Processo salvo!');
@@ -1863,15 +1906,23 @@ function renderFicha(col){
       <div class="ficha-section-titulo">Observações e Particularidades</div>
       <div class="obs-lista" id="obs-lista">
         ${(ficha.obs||[]).map(o=>`
-          <div class="obs-item" id="obs-${o.id}">
-            <div class="obs-texto">${o.texto}</div>
-            <button class="obs-del" onclick="editarObs('${o.id}')" title="Editar">✎</button>
-            <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>
+          <div class="obs-item" id="obs-${o.id}" style="flex-direction:column;align-items:stretch;">
+            <div style="display:flex;align-items:flex-start;gap:6px;">
+              <div class="obs-texto" style="flex:1;white-space:pre-wrap;">${_escP(o.texto)}</div>
+              <button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar imagem">📷</button>
+              <button class="obs-del" onclick="editarObs('${o.id}')" title="Editar">✎</button>
+              <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>
+            </div>
+            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" loading="lazy" style="max-width:150px;max-height:150px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/><button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="removerImgObs('${o.id}',${ix})" title="Remover imagem">✕</button></span>`).join('')}</div>`:''}
           </div>`).join('')}
       </div>
       <div class="obs-add-row">
         <textarea class="obs-add-inp" id="obs-nova" placeholder="Adicionar observação, particularidade ou alerta..."></textarea>
         <button class="obs-add-btn" onclick="adicionarObs()">Adicionar</button>
+      </div>
+      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label class="tfiltro-btn" style="cursor:pointer;">📷 Anexar imagem à próxima observação<input type="file" accept="image/*" style="display:none" onchange="anexarImgNova(this)"/></label>
+        <span id="obs-nova-imgs" style="display:flex;flex-wrap:wrap;gap:6px;"></span>
       </div>
     </div>
 
@@ -1883,6 +1934,7 @@ function renderFicha(col){
     </div>`:''}
   `;
   col.appendChild(wrap);
+  renderObsNovaImgs();
 }
 
 function atualizarAnexo(){
@@ -1948,16 +2000,45 @@ async function salvarFicha(){
 
 async function adicionarObs(){
   const inp=document.getElementById('obs-nova');
-  const texto=inp?.value.trim();if(!texto)return;
+  const texto=(inp?.value||'').trim();
+  if(!texto && !_obsNovaImgs.length)return;
   const ficha=getFicha(empresaAtual);
   if(!ficha.obs)ficha.obs=[];
   const id='obs_'+Date.now();
-  ficha.obs.push({id,texto});
+  ficha.obs.push({id,texto:texto||'',imagens:_obsNovaImgs.slice()});
+  _obsNovaImgs=[];
   fichas[empresaAtual]=ficha;
   await saveFichas();
-  inp.value='';
+  if(inp)inp.value='';
   renderTarefas();
   toast('✓ Observação adicionada!');
+}
+function renderObsNovaImgs(){
+  const el=document.getElementById('obs-nova-imgs'); if(!el)return;
+  el.innerHTML=_obsNovaImgs.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" style="max-width:70px;max-height:70px;border-radius:5px;border:1px solid var(--border);"/><button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="_obsNovaImgs.splice(${ix},1);renderObsNovaImgs()" title="Remover">✕</button></span>`).join('');
+}
+async function anexarImgNova(input){
+  const f=input.files&&input.files[0]; if(!f)return; input.value='';
+  toast('Enviando imagem...');
+  try{ const url=await uploadImagem(f,'obs'); _obsNovaImgs.push(url); renderObsNovaImgs(); toast('✓ Imagem pronta (salva ao adicionar a observação)'); }
+  catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar imagem (o espaço de imagens já foi criado no Supabase?)','#dc2626'); }
+}
+async function anexarImgObs(obsId){
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+  inp.onchange=async()=>{
+    const f=inp.files&&inp.files[0]; if(!f)return;
+    toast('Enviando imagem...');
+    try{
+      const url=await uploadImagem(f,'obs');
+      const ficha=getFicha(empresaAtual); const o=(ficha.obs||[]).find(x=>x.id===obsId);
+      if(o){ if(!o.imagens)o.imagens=[]; o.imagens.push(url); fichas[empresaAtual]=ficha; await saveFichas(); renderTarefas(); toast('✓ Imagem anexada!'); }
+    }catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar imagem','#dc2626'); }
+  };
+  inp.click();
+}
+async function removerImgObs(obsId,ix){
+  const ficha=getFicha(empresaAtual); const o=(ficha.obs||[]).find(x=>x.id===obsId);
+  if(o&&o.imagens){ o.imagens.splice(ix,1); fichas[empresaAtual]=ficha; await saveFichas(); renderTarefas(); toast('Imagem removida'); }
 }
 
 async function deletarObs(obsId){
