@@ -64,3 +64,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0018 — Herança automática do "não se aplica" entre meses](ADR-0018-heranca-nao-se-aplica.md)
 - [ADR-0019 — Relatório de Bancos Cadastrados](ADR-0019-relatorio-bancos.md)
 - [ADR-0020 — Saída da Cristiane e entrada da Tati (nova divisão fiscal)](ADR-0020-troca-cristiane-tati.md)
+- [ADR-0021 — Aba "Processos Questor" (manual de procedimentos da equipe)](ADR-0021-processos-questor.md)

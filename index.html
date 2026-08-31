@@ -454,6 +454,7 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
   </div>
 
   <div class="rel-wrap" id="painel-monitor" style="display:none"></div>
+  <div class="rel-wrap" id="painel-processos" style="display:none"></div>
 
   <div class="rel-wrap" id="painel-relatorios" style="display:none">
     <div class="rel-titulo">Relatórios de Gestão</div>
@@ -734,6 +735,8 @@ const SK_FICHAS='ccc_fichas_v1';
 const SK_EMPRESAS_CAD='ccc_empresas_v1';
 const SK_COLAB='ccc_colab_v1';
 const SK_BANCOS='ccc_bancos_v1';
+const SK_PROCESSOS='ccc_processos_v1';
+let processos=[]; let _procFiltro=''; let _procEditando=null;
 let db={};let nextId=1;
 let fichas={};
 let empresasCad={}; // empresasCad[nome] = {setor, responsavelFiscal, responsavelContabil, ...dados ficha}
@@ -801,6 +804,14 @@ async function loadDB(){
 async function saveDB(){
   const p=JSON.stringify({db,n:nextId});
   try{await window.storage.set(SK,p,true);}catch(e){try{localStorage.setItem(SK,p);}catch(e2){}}
+}
+async function loadProcessos(){
+  try{const r=await window.storage.get(SK_PROCESSOS);if(r&&r.value){processos=JSON.parse(r.value)||[];}}
+  catch(e){console.warn('[CCC] loadProcessos falhou',e);}
+}
+async function saveProcessos(){
+  try{await window.storage.set(SK_PROCESSOS,JSON.stringify(processos));}
+  catch(e){console.warn('[CCC] saveProcessos falhou',e);}
 }
 function getMesData(setor,mk,empresa,mes){return db[setor]?.[mk]?.[empresa]?.[mes]||{responsavel:null,tarefas:[]};}
 function setMesData(setor,mk,empresa,mes,data){
@@ -916,18 +927,23 @@ async function iniciarApp(){
     }
     document.getElementById('btn-add-tarefa').style.display='none';
   }
+  // Aba "Processos Questor" — todos veem e podem editar
+  const bp=document.createElement('button');bp.className='nav-btn';bp.textContent='📖 Processos';
+  bp.onclick=()=>trocarView('processos',bp);nav.appendChild(bp);
   await loadRef();
   await loadDB();
   await loadFichas();
   await loadBancos();
   await loadEmpresasCad();
   await loadColaboradores();
+  await loadProcessos();
   // Quando outro computador gravar, recarrega e atualiza a tela (sincronizacao).
   if(window.Backend && window.Backend.onRemoteChange){
     window.Backend.onRemoteChange(async()=>{
       try{
-        await loadDB();await loadRef();await loadBancos();await loadEmpresasCad();await loadColaboradores();
+        await loadDB();await loadRef();await loadBancos();await loadEmpresasCad();await loadColaboradores();await loadProcessos();
         if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas();
+        if(viewAtual==='processos' && !_procEditando)renderProcessos();
       }catch(e){ console.warn('[CCC] atualizacao em tempo real falhou', e); }
     });
   }
@@ -939,15 +955,17 @@ function trocarView(v,btn){
   viewAtual=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  const formViews=(v==='relatorios'||v==='admin'||v==='monitor');
+  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos');
   document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
   document.getElementById('painel-admin').style.display=v==='admin'?'block':'none';
   document.getElementById('painel-monitor').style.display=v==='monitor'?'block':'none';
+  document.getElementById('painel-processos').style.display=v==='processos'?'block':'none';
   document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews?'':'none';
   if(v==='monitor'){initMonitor();return;}
   if(v==='relatorios'){initRelatorios();return;}
   if(v==='admin'){initAdmin();return;}
+  if(v==='processos'){renderProcessos();return;}
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
   const u=USUARIOS[usuarioAtual];
   const colMembros=document.getElementById('col-membros');
@@ -1567,6 +1585,85 @@ function exportarRelatorioBancosCSV(){
   const a=document.createElement('a'); a.href=url; a.download='bancos_cadastrados.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   toast('✓ Arquivo exportado! Abra no Excel.');
+}
+
+// ===== Processos Questor (manual da equipe) =====
+function _escP(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _escAttrP(s){return _escP(s).replace(/"/g,'&quot;');}
+function renderProcessos(){
+  const el=document.getElementById('painel-processos'); if(!el)return;
+  let form='';
+  if(_procEditando){
+    const p=_procEditando==='novo'?{titulo:'',categoria:'',passos:''}:(processos.find(x=>x.id===_procEditando)||{titulo:'',categoria:'',passos:''});
+    form=`<div class="rel-filtros-card" style="margin-bottom:16px;">
+      <div class="rel-filtros-titulo">${_procEditando==='novo'?'Novo processo':'Editar processo'}</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <input class="ficha-input" id="proc-titulo" placeholder="Título (ex.: Importar XML de NF-e)" value="${_escAttrP(p.titulo)}"/>
+        <input class="ficha-input" id="proc-categoria" placeholder="Categoria (ex.: Fiscal, Folha, Cadastro)" value="${_escAttrP(p.categoria||'')}"/>
+        <textarea class="ficha-input" id="proc-passos" rows="10" placeholder="Passo a passo — uma linha por passo...">${_escP(p.passos||'')}</textarea>
+        <div style="display:flex;gap:8px;">
+          <button class="rel-btn" onclick="salvarProcesso()">💾 Salvar</button>
+          <button class="rel-btn rel-btn-sec" onclick="cancelarProcesso()">Cancelar</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  el.innerHTML=`
+    <div class="rel-titulo">📖 Processos Questor</div>
+    <div class="rel-sub">Manual de processos — qualquer pessoa da equipe pode seguir e editar</div>
+    <div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;align-items:center;">
+      <input class="ficha-input" id="proc-busca" placeholder="🔍 Buscar processo..." value="${_escAttrP(_procFiltro)}" oninput="_procFiltro=this.value;renderProcListaSomente()" style="max-width:340px;"/>
+      <button class="rel-btn" onclick="novoProcesso()">+ Novo processo</button>
+      <span style="font-size:12px;color:var(--muted);">${processos.length} processo(s)</span>
+    </div>
+    ${form}
+    <div id="proc-lista"></div>`;
+  renderProcListaSomente();
+}
+function renderProcListaSomente(){
+  const cont=document.getElementById('proc-lista'); if(!cont)return;
+  const f=(_procFiltro||'').toLowerCase().trim();
+  const lista=processos.filter(p=>!f||((p.titulo||'')+' '+(p.categoria||'')+' '+(p.passos||'')).toLowerCase().includes(f))
+    .sort((a,b)=>((a.categoria||'').localeCompare(b.categoria||'','pt'))||((a.titulo||'').localeCompare(b.titulo||'','pt')));
+  if(lista.length===0){cont.innerHTML='<div class="vazio" style="padding:24px;text-align:center;">Nenhum processo ainda. Clique em "+ Novo processo" para começar o manual.</div>';return;}
+  cont.innerHTML=lista.map(p=>`<div class="rel-section" style="margin-bottom:12px;">
+    <div style="display:flex;align-items:flex-start;gap:8px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:var(--text);">${_escP(p.titulo)}</div>
+        ${p.categoria?`<span class="badge" style="margin-top:4px;display:inline-block;">${_escP(p.categoria)}</span>`:''}
+      </div>
+      <button class="tfiltro-btn" onclick="editarProcesso('${p.id}')">✏️ Editar</button>
+      <button class="btn-danger" onclick="excluirProcesso('${p.id}')" title="Excluir">🗑️</button>
+    </div>
+    <div style="white-space:pre-wrap;font-size:13px;color:var(--text2);margin-top:8px;line-height:1.65;">${_escP(p.passos)||'<span style="color:var(--muted)">(sem passos)</span>'}</div>
+  </div>`).join('');
+}
+function novoProcesso(){ _procEditando='novo'; renderProcessos(); document.getElementById('proc-titulo')?.focus(); }
+function editarProcesso(id){ _procEditando=id; renderProcessos(); }
+function cancelarProcesso(){ _procEditando=null; renderProcessos(); }
+async function salvarProcesso(){
+  const titulo=(document.getElementById('proc-titulo')?.value||'').trim();
+  if(!titulo){toast('Informe o título do processo','#d97706');return;}
+  const categoria=(document.getElementById('proc-categoria')?.value||'').trim();
+  const passos=document.getElementById('proc-passos')?.value||'';
+  if(_procEditando && _procEditando!=='novo'){
+    const p=processos.find(x=>x.id===_procEditando);
+    if(p){ p.titulo=titulo; p.categoria=categoria; p.passos=passos; p.atualizadoEm=Date.now(); }
+  } else {
+    processos.push({id:'p_'+Date.now(),titulo,categoria,passos,criadoPor:usuarioAtual,atualizadoEm:Date.now()});
+  }
+  _procEditando=null;
+  await saveProcessos();
+  renderProcessos();
+  toast('✓ Processo salvo!');
+}
+async function excluirProcesso(id){
+  const p=processos.find(x=>x.id===id); if(!p)return;
+  if(!confirm('Excluir o processo "'+p.titulo+'"?'))return;
+  processos=processos.filter(x=>x.id!==id);
+  await saveProcessos();
+  renderProcessos();
+  toast('Processo excluído');
 }
 
 // AÇÕES
