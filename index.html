@@ -1811,7 +1811,7 @@ function renderContatosHTML(contatos, podeEditar, ro) {
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',cnae:'',respFiscal:'',respContabil:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnae:'',respFiscal:'',respContabil:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
 }
 // Empresa esta ativa a nao ser que a ficha diga ativo:false (padrao = ativa)
 function empAtiva(emp){const f=fichas[emp];return !f||f.ativo!==false;}
@@ -1836,6 +1836,8 @@ function renderFicha(col){
 
   const wrap=document.createElement('div');wrap.className='ficha-wrap';
   const ativa=empAtiva(empresaAtual);
+  const ANEXOS=['Anexo I — Comércio','Anexo II — Indústria','Anexo III — Serviços','Anexo IV — Serviços','Anexo V — Serviços'];
+  const anexosSel=(ficha.anexos&&ficha.anexos.length)?ficha.anexos:(ficha.anexo?ficha.anexo.split(/\s*,\s*/).filter(Boolean):[]);
 
   // Dados fixos
   wrap.innerHTML=`
@@ -1888,10 +1890,10 @@ function renderFicha(col){
           </select>
         </div>
         <div class="ficha-campo" id="campo-anexo" style="${ficha.regime==='Simples Nacional'?'':'display:none'}">
-          <div class="ficha-label">Anexo Simples Nacional</div>
-          <select class="ficha-select" id="f-anexo" ${dis}>
-            ${['','Anexo I — Comércio','Anexo II — Indústria','Anexo III — Serviços','Anexo IV — Serviços','Anexo V — Serviços'].map(a=>`<option value="${a}"${ficha.anexo===a?' selected':''}>${a||'— Selecione —'}</option>`).join('')}
-          </select>
+          <div class="ficha-label">Anexos Simples Nacional <span style="font-weight:400;color:var(--muted);">(marque um ou mais)</span></div>
+          <div style="display:flex;flex-direction:column;gap:5px;padding:4px 0;">
+            ${ANEXOS.map(a=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:${podeEditar?'pointer':'default'};"><input type="checkbox" class="f-anexo-chk" value="${a}" ${anexosSel.includes(a)?'checked':''} ${dis}/> ${a}</label>`).join('')}
+          </div>
         </div>
         <div class="ficha-campo"><div class="ficha-label">Alíquota / Faixa</div><input class="ficha-input" id="f-aliquota" value="${ficha.aliquota||''}" placeholder="Ex: 6%" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Período de Apuração</div>
@@ -1987,7 +1989,9 @@ async function salvarFicha(){
   ficha.respFiscal=document.getElementById('f-respFiscal')?.value||'';
   ficha.respContabil=document.getElementById('f-respContabil')?.value||'';
   ficha.regime=document.getElementById('f-regime')?.value||'Simples Nacional';
-  ficha.anexo=document.getElementById('f-anexo')?.value||'';
+  const _anexosChk=[...document.querySelectorAll('.f-anexo-chk:checked')].map(c=>c.value);
+  ficha.anexos=_anexosChk;
+  ficha.anexo=_anexosChk.join(', '); // mantem compat (relatorio/texto)
   ficha.aliquota=document.getElementById('f-aliquota')?.value||'';
   ficha.periodo=document.getElementById('f-periodo')?.value||'Mensal';
   // Salvar contatos dos inputs ativos
