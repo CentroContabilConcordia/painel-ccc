@@ -67,3 +67,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0021 — Aba "Processos Questor" (manual de procedimentos da equipe)](ADR-0021-processos-questor.md)
 - [ADR-0022 — Imagens nos Processos e nas Observações (Supabase Storage)](ADR-0022-imagens-storage.md)
 - [ADR-0023 — Anexos do Simples Nacional: seleção múltipla](ADR-0023-anexos-simples-multiplos.md)
+- [ADR-0024 — Mudança de tributação durante o ano (histórico de regime)](ADR-0024-mudanca-tributacao-durante-ano.md)

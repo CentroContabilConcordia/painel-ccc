@@ -640,10 +640,33 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
     </div>
   </div>
 </div>
+<div class="overlay" id="modal-regime">
+  <div class="modal">
+    <div class="modal-titulo">Registrar mudança de tributação</div>
+    <div class="fg"><label class="fl">Novo regime</label>
+      <select class="fs" id="mr-regime" onchange="mrToggleAnexo()">
+        <option>Simples Nacional</option><option>Lucro Presumido</option><option>Lucro Real</option><option>MEI</option><option>Imune/Isenta</option>
+      </select>
+    </div>
+    <div class="fg" id="mr-campo-anexo" style="display:none;">
+      <label class="fl">Anexos Simples Nacional <span style="font-weight:400;color:var(--muted);">(marque um ou mais)</span></label>
+      <div id="mr-anexos" style="display:flex;flex-direction:column;gap:5px;padding:2px 0;"></div>
+    </div>
+    <div class="fg"><label class="fl">A partir de (competência mês/ano)</label>
+      <input class="fi" id="mr-desde" type="month"/>
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.45;background:var(--surface3);border-radius:6px;padding:8px 10px;">O regime anterior fica guardado com o período. Nas tarefas, a partir desse mês o painel passa a mostrar o novo regime e recomeça as marcações de "não se aplica".</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="fecharModalRegime()">Cancelar</button>
+      <button class="btn-save" onclick="confirmarMudancaRegime()">Registrar mudança</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const ANEXOS_SN=['Anexo I — Comércio','Anexo II — Indústria','Anexo III — Serviços','Anexo IV — Serviços','Anexo V — Serviços'];
 
 const EMP_CRIS=[];
 const EMP_CLEO=[];
@@ -833,7 +856,8 @@ function statusNaAnterior(setor,mk,emp,mes){
 // Monta as tarefas de um mes novo: 'pendente', mas ja marca 'nao se aplica' as herdadas do mes anterior.
 function novasTarefasMes(setor,mk,emp,mes){
   const pad=setor==='fiscal'?PAD_FISCAL:PAD_CONTABIL;
-  const na=statusNaAnterior(setor,mk,emp,mes);
+  // No mês de virada de regime, NÃO herda o "não se aplica" do regime antigo — começa limpo.
+  const na=ehMesDeVirada(emp,mes)?new Set():statusNaAnterior(setor,mk,emp,mes);
   return pad.map(tp=>({id:nextId++,desc:tp.desc,area:tp.area,status:na.has(tp.desc)?'naoseaplica':'pendente'}));
 }
 
@@ -844,6 +868,7 @@ let abaEmpresa='tarefas'; // 'tarefas' | 'ficha' | 'bancos'
 
 function mesKeyFn(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
 function mesLabel(k){const[y,m]=k.split('-');return `${MESES[parseInt(m)-1]}/${y}`;}
+function _mesAnteriorKey(mk){const[y,m]=mk.split('-').map(Number);return mesKeyFn(new Date(y,m-2,1));}
 function getMembroKey(){return setorAtual==='fiscal'?membroAtual:'contabil';}
 function isGestora(){return usuarioAtual&&USUARIOS[usuarioAtual].role==='gestora';}
 
@@ -1075,6 +1100,17 @@ function renderTarefas(){
   if(abaEmpresa==='ficha'){renderFicha(col);return;}
   if(abaEmpresa==='bancos'){renderBancos(col);return;}
   if(verHistorico){renderHistorico(col,cor);return;}
+
+  // Selo do regime vigente no mês (só quando a empresa teve mudança de tributação)
+  const _fEmp=fichas[empresaAtual];
+  if(_fEmp&&_fEmp.regimeHist&&_fEmp.regimeHist.length){
+    const rv=regimeVigenteMes(_fEmp,mesAtual);
+    const virada=ehMesDeVirada(empresaAtual,mesAtual);
+    const rbd=document.createElement('div');
+    rbd.style='display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0;padding:6px 10px;background:var(--surface3);border-radius:6px;font-size:12px;';
+    rbd.innerHTML=`<span>📌 <strong>Regime deste mês:</strong> ${rv.regime}${rv.anexos&&rv.anexos.length?` <span style="color:var(--muted)">(${rv.anexos.join(', ')})</span>`:''}</span>${virada?`<span style="color:var(--green);font-weight:600;">• início do novo regime</span>`:''}`;
+    col.appendChild(rbd);
+  }
 
   if(setorAtual==='contabil'){
     const rb=document.createElement('div');rb.className='resp-bar';
@@ -1770,6 +1806,7 @@ async function salvarNovaTarefa(){
 }
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('modal-tarefa').addEventListener('click',e=>{if(e.target===document.getElementById('modal-tarefa'))fecharModal();});
+  document.getElementById('modal-regime').addEventListener('click',e=>{if(e.target===document.getElementById('modal-regime'))fecharModalRegime();});
   initLogin();
   // "Continuar conectada": se já houver uma sessão válida, entra direto (sem relogar).
   (async()=>{
@@ -1811,7 +1848,27 @@ function renderContatosHTML(contatos, podeEditar, ro) {
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnae:'',respFiscal:'',respContabil:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
+}
+// ── Histórico de tributação (mudança de regime durante o ano) ──
+// Cada segmento: {regime, desde:'AAAA-MM' (''=desde sempre), anexos:[]}
+function regimeSegmentos(ficha){
+  if(!ficha) return [];
+  if(ficha.regimeHist && ficha.regimeHist.length) return ficha.regimeHist.slice().sort((a,b)=>(a.desde||'').localeCompare(b.desde||''));
+  return [{regime:ficha.regime||'Simples Nacional', desde:'', anexos:ficha.anexos||[]}];
+}
+// Regime vigente numa competência (mesKey 'AAAA-MM')
+function regimeVigenteMes(ficha, mes){
+  const segs=regimeSegmentos(ficha);
+  let atual=segs[0];
+  for(const s of segs){ if(!s.desde || s.desde<=mes) atual=s; }
+  return atual||{regime:(ficha&&ficha.regime)||'Simples Nacional', anexos:(ficha&&ficha.anexos)||[]};
+}
+// Esse mês é o início de um novo regime (a virada)?
+function ehMesDeVirada(emp, mes){
+  const ficha=fichas[emp];
+  if(!ficha||!ficha.regimeHist||!ficha.regimeHist.length) return false;
+  return ficha.regimeHist.some(s=>s.desde===mes);
 }
 // Empresa esta ativa a nao ser que a ficha diga ativo:false (padrao = ativa)
 function empAtiva(emp){const f=fichas[emp];return !f||f.ativo!==false;}
@@ -1836,7 +1893,7 @@ function renderFicha(col){
 
   const wrap=document.createElement('div');wrap.className='ficha-wrap';
   const ativa=empAtiva(empresaAtual);
-  const ANEXOS=['Anexo I — Comércio','Anexo II — Indústria','Anexo III — Serviços','Anexo IV — Serviços','Anexo V — Serviços'];
+  const ANEXOS=ANEXOS_SN;
   const anexosSel=(ficha.anexos&&ficha.anexos.length)?ficha.anexos:(ficha.anexo?ficha.anexo.split(/\s*,\s*/).filter(Boolean):[]);
 
   // Dados fixos
@@ -1902,6 +1959,7 @@ function renderFicha(col){
           </select>
         </div>
       </div>
+      ${regimeHistHTML(ficha, podeEditar)}
     </div>
 
     <div class="ficha-section">
@@ -1943,6 +2001,85 @@ function atualizarAnexo(){
   const regime=document.getElementById('f-regime')?.value;
   const campo=document.getElementById('campo-anexo');
   if(campo) campo.style.display=regime==='Simples Nacional'?'':'none';
+}
+
+// ── Histórico de tributação: linha do tempo + registrar/excluir mudança ──
+function regimeHistHTML(ficha, podeEditar){
+  const hist=ficha.regimeHist||[];
+  const segs=regimeSegmentos(ficha);
+  let linhas='';
+  if(hist.length){ // só mostra a linha do tempo quando houve mudança
+    segs.forEach((s,i)=>{
+      const prox=segs[i+1];
+      const ini=s.desde?('a partir de '+mesLabel(s.desde)):'desde o início';
+      const fim=prox?(' até '+mesLabel(_mesAnteriorKey(prox.desde))):' · atual';
+      const anexoTxt=(s.anexos&&s.anexos.length)?` <span style="color:var(--muted)">(${s.anexos.join(', ')})</span>`:'';
+      const del=(podeEditar&&s.desde)?`<button class="obs-del" onclick="excluirMudancaRegime('${s.desde}')" title="Remover esta mudança">✕</button>`:'';
+      linhas+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-left:3px solid ${prox?'var(--border)':'var(--green)'};background:var(--surface3);border-radius:4px;margin-bottom:5px;"><div style="flex:1;font-size:12px;"><strong>${s.regime}</strong>${anexoTxt} <span style="color:var(--muted)">— ${ini}${fim}</span></div>${del}</div>`;
+    });
+  }
+  const btn=podeEditar?`<button class="contato-add-btn" onclick="abrirMudancaRegime()" style="margin-top:${hist.length?'2px':'8px'};">+ Registrar mudança de tributação</button>`:'';
+  const tituloHist=hist.length?`<div class="ficha-label" style="margin-bottom:6px;">📅 Histórico de tributação</div>`:'';
+  return `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">${tituloHist}${linhas}${btn}</div>`;
+}
+function mrToggleAnexo(){
+  const r=document.getElementById('mr-regime')?.value;
+  const campo=document.getElementById('mr-campo-anexo');
+  if(campo) campo.style.display=r==='Simples Nacional'?'':'none';
+}
+function abrirMudancaRegime(){
+  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
+  if(!empresaAtual){toast('Selecione uma empresa','#d97706');return;}
+  document.getElementById('mr-regime').value='Lucro Presumido';
+  document.getElementById('mr-desde').value='';
+  const box=document.getElementById('mr-anexos');
+  box.innerHTML=ANEXOS_SN.map(a=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" class="mr-anexo-chk" value="${a}"/> ${a}</label>`).join('');
+  mrToggleAnexo();
+  document.getElementById('modal-regime').classList.add('open');
+}
+function fecharModalRegime(){document.getElementById('modal-regime').classList.remove('open');}
+async function confirmarMudancaRegime(){
+  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
+  const novo=document.getElementById('mr-regime').value;
+  const desde=document.getElementById('mr-desde').value; // 'AAAA-MM'
+  if(!desde){toast('Informe o mês de início','#d97706');return;}
+  const ficha=getFicha(empresaAtual);
+  const anexos=novo==='Simples Nacional'?[...document.querySelectorAll('.mr-anexo-chk:checked')].map(c=>c.value):[];
+  // Monta o histórico partindo do estado atual, se ainda não existir
+  if(!ficha.regimeHist||!ficha.regimeHist.length){
+    ficha.regimeHist=[{regime:ficha.regime||'Simples Nacional',desde:'',anexos:(ficha.anexos||[]).slice()}];
+  }
+  // Não deixa duas mudanças no mesmo mês: substitui se já houver
+  ficha.regimeHist=ficha.regimeHist.filter(s=>s.desde!==desde);
+  ficha.regimeHist.push({regime:novo,desde,anexos});
+  ficha.regimeHist.sort((a,b)=>(a.desde||'').localeCompare(b.desde||''));
+  // Regime "atual" da ficha = último segmento da linha do tempo
+  const ult=ficha.regimeHist[ficha.regimeHist.length-1];
+  ficha.regime=ult.regime;
+  ficha.anexos=(ult.anexos||[]).slice();
+  ficha.anexo=(ult.anexos||[]).join(', ');
+  fichas[empresaAtual]=ficha;
+  await saveFichas();
+  fecharModalRegime();
+  renderTarefas();
+  toast('✓ Mudança de tributação registrada!');
+}
+async function excluirMudancaRegime(desde){
+  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
+  const ficha=getFicha(empresaAtual);
+  if(!ficha.regimeHist)return;
+  if(!confirm('Remover esta mudança de tributação da linha do tempo?'))return;
+  ficha.regimeHist=ficha.regimeHist.filter(s=>s.desde!==desde);
+  // Se sobrou só o segmento inicial (ou nenhum), zera o histórico
+  if(ficha.regimeHist.length<=1)ficha.regimeHist=[];
+  // Recalcula o regime atual
+  const segs=regimeSegmentos(ficha);
+  const ult=segs[segs.length-1];
+  if(ult){ficha.regime=ult.regime;ficha.anexos=(ult.anexos||[]).slice();ficha.anexo=(ult.anexos||[]).join(', ');}
+  fichas[empresaAtual]=ficha;
+  await saveFichas();
+  renderTarefas();
+  toast('Mudança removida');
 }
 
 function adicionarContato(){
@@ -1992,6 +2129,11 @@ async function salvarFicha(){
   const _anexosChk=[...document.querySelectorAll('.f-anexo-chk:checked')].map(c=>c.value);
   ficha.anexos=_anexosChk;
   ficha.anexo=_anexosChk.join(', '); // mantem compat (relatorio/texto)
+  // Se ha linha do tempo de tributacao, o campo Regime edita o segmento ATUAL (ultimo)
+  if(ficha.regimeHist&&ficha.regimeHist.length){
+    const ult=ficha.regimeHist[ficha.regimeHist.length-1];
+    ult.regime=ficha.regime; ult.anexos=_anexosChk.slice();
+  }
   ficha.aliquota=document.getElementById('f-aliquota')?.value||'';
   ficha.periodo=document.getElementById('f-periodo')?.value||'Mensal';
   // Salvar contatos dos inputs ativos
