@@ -54,8 +54,12 @@
   function _ligarRealtime() {
     if (_rtLigado) return; _rtLigado = true;
     _sb.channel('kv_store_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kv_store' }, () => {
-        if (_remoteCb) { try { _remoteCb(); } catch (e) { console.warn('[CCC] onRemoteChange erro', e); } }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'kv_store' }, (payload) => {
+        if (_remoteCb) {
+          // Informa QUAL chave mudou, para a camada de cima recarregar so o necessario (economia de dados).
+          const key = (payload && payload.new && payload.new.key) || (payload && payload.old && payload.old.key) || null;
+          try { _remoteCb(key); } catch (e) { console.warn('[CCC] onRemoteChange erro', e); }
+        }
       })
       .subscribe();
   }

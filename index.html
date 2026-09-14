@@ -11,8 +11,8 @@
      o adaptador atual. Para migrar para outro PostgreSQL no futuro, escreva
      um "backend-xxxx.js" com as mesmas funcoes e troque a linha abaixo. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=6"></script>
-<script src="backend-supabase.js?v=6"></script>
+<script src="config.js?v=7"></script>
+<script src="backend-supabase.js?v=7"></script>
 <!-- ===== fim camada de dados ===== -->
 
 <style>
@@ -962,18 +962,35 @@ async function iniciarApp(){
   await loadEmpresasCad();
   await loadColaboradores();
   await loadProcessos();
-  // Quando outro computador gravar, recarrega e atualiza a tela (sincronizacao).
+  // Quando outro computador gravar, recarrega SO o que mudou (economia de dados).
+  // Antes: qualquer mudanca rebaixava TODAS as tabelas/blobs a cada evento, e havia
+  // ainda uma busca completa a cada 20s. Isso estourava a cota de trafego (egress).
   if(window.Backend && window.Backend.onRemoteChange){
-    window.Backend.onRemoteChange(async()=>{
-      try{
-        await loadDB();await loadRef();await loadBancos();await loadEmpresasCad();await loadColaboradores();await loadProcessos();
-        if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas();
-        if(viewAtual==='processos' && !_procEditando)renderProcessos();
-      }catch(e){ console.warn('[CCC] atualizacao em tempo real falhou', e); }
+    let _rtPend=new Set(), _rtTimer=null;
+    window.Backend.onRemoteChange((key)=>{
+      _rtPend.add(key||'*');
+      if(_rtTimer)return; // agrupa rajadas de mudancas numa unica recarga (debounce)
+      _rtTimer=setTimeout(async()=>{
+        const keys=_rtPend; _rtPend=new Set(); _rtTimer=null;
+        const todos=keys.has('*');
+        try{
+          if(todos||keys.has(SK)){ await loadDB(); if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas(); }
+          if(todos||keys.has(SK_PROCESSOS)){ await loadProcessos(); if(viewAtual==='processos' && !_procEditando)renderProcessos(); }
+          if(todos||keys.has(SK_EMPRESAS_CAD)){ await loadEmpresasCad(); }
+          if(todos||keys.has(SK_COLAB)){ await loadColaboradores(); }
+        }catch(e){ console.warn('[CCC] atualizacao em tempo real falhou', e); }
+      },1500);
     });
   }
+  // Rede de seguranca leve: ao VOLTAR para a aba, ressincroniza as tarefas
+  // (no maximo 1x a cada 2 min). Substitui a antiga busca de 20 em 20 segundos.
+  let _ultimoSync=Date.now();
+  document.addEventListener('visibilitychange',async()=>{
+    if(document.hidden || (Date.now()-_ultimoSync)<120000) return;
+    _ultimoSync=Date.now();
+    try{ await loadDB(); if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas(); }catch(e){}
+  });
   trocarView(isGestora()?'monitor':USUARIOS[usuarioAtual].setor,document.querySelector('.nav-btn'));
-  setInterval(async()=>{await loadDB();if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas();},20000);
 }
 
 function trocarView(v,btn){
