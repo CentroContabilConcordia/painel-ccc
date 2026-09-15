@@ -902,7 +902,13 @@ async function entrar(){
   try{
     const res = await window.Backend.signIn(usuarioAtual, senha);
     if(!res || !res.ok){
-      erro.textContent='Senha incorreta.';
+      // Só diz "senha incorreta" quando o servidor confirma credencial inválida.
+      // Qualquer outra falha (servidor restrito/402, rede) NÃO é a senha da pessoa.
+      const em=((res&&res.error)||'').toLowerCase();
+      const senhaErrada = em.includes('invalid login') || em.includes('invalid credentials') || em.includes('credential');
+      erro.textContent = senhaErrada
+        ? 'Senha incorreta.'
+        : 'Sistema temporariamente indisponível (problema no servidor, não é a sua senha). Avise a Patrícia.';
       if(btn){btn.disabled=false;btn.textContent=btn.dataset.txt||'Entrar';}
       return;
     }
