@@ -455,6 +455,26 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
 
   <div class="rel-wrap" id="painel-monitor" style="display:none"></div>
   <div class="rel-wrap" id="painel-processos" style="display:none"></div>
+  <div class="rel-wrap" id="painel-contabanual" style="display:none"></div>
+  <style>
+    .ca-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+    .ca-scroll{overflow:auto;max-height:calc(100vh - 210px);border:1px solid var(--border);border-radius:8px;}
+    .ca-table{border-collapse:separate;border-spacing:0;font-size:12px;white-space:nowrap;background:var(--surface);}
+    .ca-table th,.ca-table td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:5px 6px;text-align:center;}
+    .ca-table thead th{position:sticky;top:0;background:var(--surface2);z-index:2;font-size:11px;color:var(--muted);text-transform:uppercase;}
+    .ca-emp{position:sticky;left:0;background:var(--surface);text-align:left!important;min-width:210px;max-width:210px;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
+    .ca-table thead .ca-emp{z-index:4;background:var(--surface2);}
+    .ca-tot td{position:sticky;top:27px;background:var(--surface3);font-weight:700;color:var(--text);z-index:1;}
+    .ca-tot .ca-emp{z-index:3;background:var(--surface3);}
+    .ca-cell{cursor:pointer;width:32px;font-weight:700;user-select:none;}
+    .ca-cell:hover{outline:2px solid var(--accent);outline-offset:-2px;}
+    .ca-feito{background:#dcfce7;color:#16a34a;}
+    .ca-na{background:#f1f5f9;color:#94a3b8;}
+    .ca-vazio{color:#e2e8f0;}
+    .ca-annual{background:#faf5ff;}
+    .ca-obs-inp{border:1px solid var(--border);border-radius:5px;padding:3px 6px;font-size:11px;min-width:180px;background:var(--surface);color:var(--text);}
+    @media (prefers-color-scheme: dark){ .ca-feito{background:#14351f;color:#4ade80;} .ca-na{background:#1e293b;color:#64748b;} .ca-vazio{color:#334155;} .ca-annual{background:#241b2e;} }
+  </style>
 
   <div class="rel-wrap" id="painel-relatorios" style="display:none">
     <div class="rel-titulo">Relatórios de Gestão</div>
@@ -757,7 +777,10 @@ const SK_EMPRESAS_CAD='ccc_empresas_v1';
 const SK_COLAB='ccc_colab_v1';
 const SK_BANCOS='ccc_bancos_v1';
 const SK_PROCESSOS='ccc_processos_v1';
+const SK_CONTAB_ANUAL='ccc_contab_anual_v1';
 let processos=[]; let _procFiltro=''; let _procEditando=null; let _procImgs=[]; let _obsNovaImgs=[];
+// Controle Anual do Contábil: contabAnual[ano][empresaNome] = {meses:{1..12}, balanco, ecd, ecf, obs}
+let contabAnual={}; let _caAno='2026'; let _caBusca=''; let _caSoPend=false; let _caRespFiltro='';
 let db={};let nextId=1;
 let fichas={};
 let empresasCad={}; // empresasCad[nome] = {setor, responsavelFiscal, responsavelContabil, ...dados ficha}
@@ -834,6 +857,96 @@ async function saveProcessos(){
   try{await window.storage.set(SK_PROCESSOS,JSON.stringify(processos));}
   catch(e){console.warn('[CCC] saveProcessos falhou',e);}
 }
+async function loadContabAnual(){
+  try{const r=await window.storage.get(SK_CONTAB_ANUAL);if(r&&r.value)contabAnual=JSON.parse(r.value)||{};}
+  catch(e){console.warn('[CCC] loadContabAnual falhou',e);}
+}
+async function saveContabAnual(){
+  try{await window.storage.set(SK_CONTAB_ANUAL,JSON.stringify(contabAnual));}
+  catch(e){console.warn('[CCC] saveContabAnual falhou',e);}
+}
+const CA_MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const CA_CICLO={'':'feito','feito':'na','na':''};
+let _caRows=[];
+function _caEmpresasVisiveis(){
+  let arr=TODAS_EMPRESAS.filter(n=>empAtiva(n));
+  if(_caBusca){const q=_caBusca.toLowerCase();arr=arr.filter(n=>n.toLowerCase().includes(q));}
+  if(_caRespFiltro){arr=arr.filter(n=>((fichas[n]||{}).respContabil||'')===_caRespFiltro);}
+  if(_caSoPend){
+    const hoje=new Date();
+    const lim=(parseInt(_caAno)===hoje.getFullYear())?(hoje.getMonth()+1):12;
+    arr=arr.filter(n=>{const e=(contabAnual[_caAno]||{})[n];for(let m=1;m<=lim;m++){const v=(e&&e.meses&&e.meses[m])||'';if(v==='')return true;}return false;});
+  }
+  return arr;
+}
+function _caCell(idx,campo,val,extra){
+  const cls=val==='feito'?'ca-cell ca-feito':val==='na'?'ca-cell ca-na':'ca-cell ca-vazio';
+  const sym=val==='feito'?'✓':val==='na'?'–':'·';
+  return `<td class="${cls}${extra||''}" onclick="caToggle(${idx},'${campo}')">${sym}</td>`;
+}
+function renderContabAnual(){
+  const host=document.getElementById('painel-contabanual');
+  host.innerHTML=`
+    <div class="ca-toolbar">
+      <div class="rel-titulo" style="margin:0;">📅 Controle Anual do Contábil</div>
+      <div style="display:flex;gap:4px;">
+        ${['2025','2026'].map(a=>`<button class="hist-btn ${_caAno===a?'active':''}" onclick="caSetAno('${a}')">${a}</button>`).join('')}
+      </div>
+      <input class="add-inp" style="max-width:210px;" placeholder="Buscar empresa..." value="${_escAttrP(_caBusca)}" oninput="caBusca(this.value)" autocomplete="off"/>
+      <label style="font-size:12px;display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="checkbox" ${_caSoPend?'checked':''} onchange="caSoPend(this.checked)"/> Só pendentes</label>
+      <select class="ficha-select" style="max-width:180px;" onchange="caResp(this.value)">
+        <option value="">Todos responsáveis</option>
+        ${MEMBROS_CONTABIL.map(m=>`<option value="${m.id}" ${_caRespFiltro===m.id?'selected':''}>${m.nome}</option>`).join('')}
+      </select>
+      <span style="font-size:11px;color:var(--muted);">✓ feito · – não se aplica · · pendente — clique p/ alternar</span>
+    </div>
+    <div id="ca-tablehost"></div>`;
+  renderCaTable();
+}
+function renderCaTable(){
+  const holder=document.getElementById('ca-tablehost'); if(!holder)return;
+  const prev=holder.querySelector('.ca-scroll'); const sT=prev?prev.scrollTop:0, sL=prev?prev.scrollLeft:0;
+  const ano=_caAno;
+  _caRows=_caEmpresasVisiveis();
+  const N=_caRows.length;
+  // totais por coluna (só "feito")
+  const tot={}; for(let m=1;m<=12;m++)tot['m'+m]=0; tot.balanco=0;tot.ecd=0;tot.ecf=0;
+  _caRows.forEach(n=>{const e=(contabAnual[ano]||{})[n];if(!e)return;const ms=e.meses||{};for(let m=1;m<=12;m++)if(ms[m]==='feito')tot['m'+m]++;['balanco','ecd','ecf'].forEach(c=>{if(e[c]==='feito')tot[c]++;});});
+  const head=`<tr><th class="ca-emp">Empresa (${N})</th>${CA_MESES.map(m=>`<th>${m}</th>`).join('')}<th class="ca-annual">Balanço</th><th class="ca-annual">ECD</th><th class="ca-annual">ECF</th><th style="text-align:left;">Observações</th></tr>`;
+  const totrow=`<tr class="ca-tot"><td class="ca-emp">✓ feitas</td>${CA_MESES.map((_,i)=>`<td>${tot['m'+(i+1)]}</td>`).join('')}<td>${tot.balanco}</td><td>${tot.ecd}</td><td>${tot.ecf}</td><td></td></tr>`;
+  const rows=_caRows.map((n,idx)=>{
+    const e=(contabAnual[ano]||{})[n]||{}; const ms=e.meses||{};
+    let tds=''; for(let m=1;m<=12;m++) tds+=_caCell(idx,'m'+m,ms[m]||'');
+    tds+=_caCell(idx,'balanco',e.balanco||'',' ca-annual');
+    tds+=_caCell(idx,'ecd',e.ecd||'',' ca-annual');
+    tds+=_caCell(idx,'ecf',e.ecf||'',' ca-annual');
+    return `<tr><td class="ca-emp" title="${_escAttrP(n)}">${_escP(n)}</td>${tds}<td style="text-align:left;"><input class="ca-obs-inp" value="${_escAttrP(e.obs||'')}" placeholder="—" onchange="caObs(${idx},this.value)"/></td></tr>`;
+  }).join('');
+  const vazio=N===0?'<div class="vazio" style="padding:22px;">Nenhuma empresa com esse filtro.</div>':'';
+  holder.innerHTML=vazio||`<div class="ca-scroll"><table class="ca-table"><thead>${head}${totrow}</thead><tbody>${rows}</tbody></table></div>`;
+  const sc=holder.querySelector('.ca-scroll'); if(sc){sc.scrollTop=sT;sc.scrollLeft=sL;}
+}
+function _caEnsure(n){
+  contabAnual[_caAno]=contabAnual[_caAno]||{};
+  return contabAnual[_caAno][n]||(contabAnual[_caAno][n]={meses:{},balanco:'',ecd:'',ecf:'',obs:''});
+}
+async function caToggle(idx,campo){
+  const n=_caRows[idx]; if(!n)return;
+  const e=_caEnsure(n);
+  if(campo[0]==='m'){const m=campo.slice(1);e.meses=e.meses||{};e.meses[m]=CA_CICLO[e.meses[m]||'']||'';}
+  else {e[campo]=CA_CICLO[e[campo]||'']||'';}
+  renderCaTable();
+  await saveContabAnual();
+}
+async function caObs(idx,val){
+  const n=_caRows[idx]; if(!n)return;
+  _caEnsure(n).obs=val;
+  await saveContabAnual();
+}
+function caSetAno(a){ _caAno=a; renderContabAnual(); }
+function caBusca(v){ _caBusca=v; renderCaTable(); }
+function caSoPend(b){ _caSoPend=b; renderCaTable(); }
+function caResp(v){ _caRespFiltro=v; renderCaTable(); }
 function getMesData(setor,mk,empresa,mes){return db[setor]?.[mk]?.[empresa]?.[mes]||{responsavel:null,tarefas:[]};}
 function setMesData(setor,mk,empresa,mes,data){
   if(!db[setor])db[setor]={};if(!db[setor][mk])db[setor][mk]={};
@@ -959,6 +1072,9 @@ async function iniciarApp(){
   // Aba "Processos Questor" — todos veem e podem editar
   const bp=document.createElement('button');bp.className='nav-btn';bp.textContent='📖 Processos';
   bp.onclick=()=>trocarView('processos',bp);nav.appendChild(bp);
+  // Aba "Controle Anual" do contábil — visão do ano por empresa/mês
+  const bca=document.createElement('button');bca.className='nav-btn';bca.textContent='📅 Controle Anual';
+  bca.onclick=()=>trocarView('contabanual',bca);nav.appendChild(bca);
   await loadRef();
   await loadDB();
   await loadFichas();
@@ -966,6 +1082,7 @@ async function iniciarApp(){
   await loadEmpresasCad();
   await loadColaboradores();
   await loadProcessos();
+  await loadContabAnual();
   // Quando outro computador gravar, recarrega SO o que mudou (economia de dados).
   // Antes: qualquer mudanca rebaixava TODAS as tabelas/blobs a cada evento, e havia
   // ainda uma busca completa a cada 20s. Isso estourava a cota de trafego (egress).
@@ -980,6 +1097,7 @@ async function iniciarApp(){
         try{
           if(todos||keys.has(SK)){ await loadDB(); if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas(); }
           if(todos||keys.has(SK_PROCESSOS)){ await loadProcessos(); if(viewAtual==='processos' && !_procEditando)renderProcessos(); }
+          if(todos||keys.has(SK_CONTAB_ANUAL)){ await loadContabAnual(); if(viewAtual==='contabanual')renderContabAnual(); }
           if(todos||keys.has(SK_EMPRESAS_CAD)){ await loadEmpresasCad(); }
           if(todos||keys.has(SK_COLAB)){ await loadColaboradores(); }
         }catch(e){ console.warn('[CCC] atualizacao em tempo real falhou', e); }
@@ -1001,17 +1119,19 @@ function trocarView(v,btn){
   viewAtual=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos');
+  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual');
   document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
   document.getElementById('painel-admin').style.display=v==='admin'?'block':'none';
   document.getElementById('painel-monitor').style.display=v==='monitor'?'block':'none';
   document.getElementById('painel-processos').style.display=v==='processos'?'block':'none';
+  document.getElementById('painel-contabanual').style.display=v==='contabanual'?'block':'none';
   document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews?'':'none';
   if(v==='monitor'){initMonitor();return;}
   if(v==='relatorios'){initRelatorios();return;}
   if(v==='admin'){initAdmin();return;}
   if(v==='processos'){renderProcessos();return;}
+  if(v==='contabanual'){renderContabAnual();return;}
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
   const u=USUARIOS[usuarioAtual];
   const colMembros=document.getElementById('col-membros');
