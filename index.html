@@ -473,7 +473,13 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
     .ca-vazio{color:#e2e8f0;}
     .ca-annual{background:#faf5ff;}
     .ca-obs-inp{border:1px solid var(--border);border-radius:5px;padding:3px 6px;font-size:11px;min-width:180px;background:var(--surface);color:var(--text);}
-    @media (prefers-color-scheme: dark){ .ca-feito{background:#14351f;color:#4ade80;} .ca-na{background:#1e293b;color:#64748b;} .ca-vazio{color:#334155;} .ca-annual{background:#241b2e;} }
+    .ca-obs-inp:disabled{background:var(--surface3);color:var(--muted);}
+    .ca-lock{background:none;border:none;cursor:pointer;font-size:13px;margin-right:3px;padding:0;opacity:.3;vertical-align:middle;}
+    .ca-lock.on{opacity:1;}
+    .ca-lock:hover{opacity:1;}
+    .ca-emp.ca-locked{background:#fef3c7!important;box-shadow:inset 3px 0 0 #f59e0b;}
+    .ca-lockcell{cursor:not-allowed;}
+    @media (prefers-color-scheme: dark){ .ca-feito{background:#14351f;color:#4ade80;} .ca-na{background:#1e293b;color:#64748b;} .ca-vazio{color:#334155;} .ca-annual{background:#241b2e;} .ca-emp.ca-locked{background:#3a2f10!important;} }
   </style>
 
   <div class="rel-wrap" id="painel-relatorios" style="display:none">
@@ -879,9 +885,10 @@ function _caEmpresasVisiveis(){
   }
   return arr;
 }
-function _caCell(idx,campo,val,extra){
+function _caCell(idx,campo,val,extra,locked){
   const cls=val==='feito'?'ca-cell ca-feito':val==='na'?'ca-cell ca-na':'ca-cell ca-vazio';
   const sym=val==='feito'?'✓':val==='na'?'–':'·';
+  if(locked) return `<td class="${cls}${extra||''} ca-lockcell">${sym}</td>`;
   return `<td class="${cls}${extra||''}" onclick="caToggle(${idx},'${campo}')">${sym}</td>`;
 }
 function renderContabAnual(){
@@ -914,13 +921,20 @@ function renderCaTable(){
   _caRows.forEach(n=>{const e=(contabAnual[ano]||{})[n];if(!e)return;const ms=e.meses||{};for(let m=1;m<=12;m++)if(ms[m]==='feito')tot['m'+m]++;['balanco','ecd','ecf'].forEach(c=>{if(e[c]==='feito')tot[c]++;});});
   const head=`<tr><th class="ca-emp">Empresa (${N})</th>${CA_MESES.map(m=>`<th>${m}</th>`).join('')}<th class="ca-annual">Balanço</th><th class="ca-annual">ECD</th><th class="ca-annual">ECF</th><th style="text-align:left;">Observações</th></tr>`;
   const totrow=`<tr class="ca-tot"><td class="ca-emp">✓ feitas</td>${CA_MESES.map((_,i)=>`<td>${tot['m'+(i+1)]}</td>`).join('')}<td>${tot.balanco}</td><td>${tot.ecd}</td><td>${tot.ecf}</td><td></td></tr>`;
+  const gest=isGestora();
   const rows=_caRows.map((n,idx)=>{
-    const e=(contabAnual[ano]||{})[n]||{}; const ms=e.meses||{};
-    let tds=''; for(let m=1;m<=12;m++) tds+=_caCell(idx,'m'+m,ms[m]||'');
-    tds+=_caCell(idx,'balanco',e.balanco||'',' ca-annual');
-    tds+=_caCell(idx,'ecd',e.ecd||'',' ca-annual');
-    tds+=_caCell(idx,'ecf',e.ecf||'',' ca-annual');
-    return `<tr><td class="ca-emp" title="${_escAttrP(n)}">${_escP(n)}</td>${tds}<td style="text-align:left;"><input class="ca-obs-inp" value="${_escAttrP(e.obs||'')}" placeholder="—" onchange="caObs(${idx},this.value)"/></td></tr>`;
+    const e=(contabAnual[ano]||{})[n]||{}; const ms=e.meses||{}; const lock=e.bloqueado===true;
+    let tds=''; for(let m=1;m<=12;m++) tds+=_caCell(idx,'m'+m,ms[m]||'','',lock);
+    tds+=_caCell(idx,'balanco',e.balanco||'',' ca-annual',lock);
+    tds+=_caCell(idx,'ecd',e.ecd||'',' ca-annual',lock);
+    tds+=_caCell(idx,'ecf',e.ecf||'',' ca-annual',lock);
+    const lockBtn=gest
+      ? `<button class="ca-lock${lock?' on':''}" onclick="caLockToggle(${idx})" title="${lock?'Desbloquear (liberar edição)':'Bloquear — balanço e declarações encerrados'}">${lock?'🔒':'🔓'}</button>`
+      : (lock?`<span class="ca-lock on" title="Finalizada / bloqueada">🔒</span>`:'');
+    const obsInp=lock
+      ? `<input class="ca-obs-inp" value="${_escAttrP(e.obs||'')}" disabled/>`
+      : `<input class="ca-obs-inp" value="${_escAttrP(e.obs||'')}" placeholder="—" onchange="caObs(${idx},this.value)"/>`;
+    return `<tr><td class="ca-emp${lock?' ca-locked':''}" title="${_escAttrP(n)}">${lockBtn}${_escP(n)}</td>${tds}<td style="text-align:left;">${obsInp}</td></tr>`;
   }).join('');
   const vazio=N===0?'<div class="vazio" style="padding:22px;">Nenhuma empresa com esse filtro.</div>':'';
   holder.innerHTML=vazio||`<div class="ca-scroll"><table class="ca-table"><thead>${head}${totrow}</thead><tbody>${rows}</tbody></table></div>`;
@@ -930,8 +944,10 @@ function _caEnsure(n){
   contabAnual[_caAno]=contabAnual[_caAno]||{};
   return contabAnual[_caAno][n]||(contabAnual[_caAno][n]={meses:{},balanco:'',ecd:'',ecf:'',obs:''});
 }
+function _caBloqueada(n){ return (((contabAnual[_caAno]||{})[n]||{}).bloqueado===true); }
 async function caToggle(idx,campo){
   const n=_caRows[idx]; if(!n)return;
+  if(_caBloqueada(n)){ toast('Empresa finalizada/bloqueada — só a gestora libera.','#d97706'); return; }
   const e=_caEnsure(n);
   if(campo[0]==='m'){const m=campo.slice(1);e.meses=e.meses||{};e.meses[m]=CA_CICLO[e.meses[m]||'']||'';}
   else {e[campo]=CA_CICLO[e[campo]||'']||'';}
@@ -940,8 +956,18 @@ async function caToggle(idx,campo){
 }
 async function caObs(idx,val){
   const n=_caRows[idx]; if(!n)return;
+  if(_caBloqueada(n))return;
   _caEnsure(n).obs=val;
   await saveContabAnual();
+}
+async function caLockToggle(idx){
+  if(!isGestora()){toast('Só as gestoras podem bloquear','#dc2626');return;}
+  const n=_caRows[idx]; if(!n)return;
+  const e=_caEnsure(n);
+  e.bloqueado = !(e.bloqueado===true);
+  renderCaTable();
+  await saveContabAnual();
+  toast(e.bloqueado?('🔒 '+n+' bloqueada em '+_caAno):('🔓 '+n+' liberada'));
 }
 function caSetAno(a){ _caAno=a; renderContabAnual(); }
 function caBusca(v){ _caBusca=v; renderCaTable(); }

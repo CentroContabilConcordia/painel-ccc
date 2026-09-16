@@ -60,3 +60,14 @@ empresa × mês do ano:
 - ✅ **Qualidade/visão:** panorama imediato do ano (o que falta, por mês e por empresa).
 - 🛡️ **Menos erro/perda:** fim do arquivo travando/sumindo na rede.
 - ⏱️ **Tempo:** um clique marca; filtros acham pendências na hora.
+
+## Atualização (2026-09-16) — Bloqueio de empresa finalizada
+A pedido da Patrícia: quando **o balanço e as declarações (ECD/ECF) de uma empresa
+são encerrados**, a **gestora** pode **bloquear** aquela empresa **naquele ano**.
+- Cadeado por linha, **só gestoras** clicam (🔓 libera → 🔒 bloqueia).
+- Bloqueada = **só leitura**: ninguém edita as células nem a observação daquela
+  empresa/ano (a linha fica âmbar com 🔒). Só a gestora desbloqueia.
+- É **por ano** (bloquear 2025 não afeta 2026).
+- Guardado em `contabAnual[ano][empresa].bloqueado=true`. Funções `caLockToggle`
+  (gestora) e guarda `_caBloqueada` em `caToggle`/`caObs`. Verificado no navegador
+  (bloqueia/edição recusada/desbloqueia; só gestora). Só `index.html`.
