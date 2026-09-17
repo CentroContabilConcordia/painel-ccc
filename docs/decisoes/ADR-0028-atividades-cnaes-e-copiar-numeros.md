@@ -46,6 +46,17 @@ campos; copia apenas os dígitos. Disponível a **todos** (copiar não é editar
   anexo/obs. As 4-5 empresas recém-abertas (2026) podem ainda não constar na base
   pública — CNAE delas entra manual ou numa reimportação futura.
 
+## Atualização (2026-09-17) — Sugestão automática de anexo (conferir)
+A pedido da Patrícia, o anexo passa a vir **pré-preenchido como sugestão** pela regra
+geral da LC 123, pra equipe **só conferir**: Comércio (CNAE div. 45-47)→Anexo I;
+Indústria (05-09, 10-33)→Anexo II; Construção (41-43)→Anexo IV; demais serviços→Anexo
+III. Cada sugestão fica marcada `anexoSug:true` e aparece em **âmbar com etiqueta
+"sugestão"** + aviso (serviços dependem do Fator R — pode ser III ou V); ao a gestora
+**mudar o anexo** ou clicar **"✓ Confirmar anexos sugeridos"**, o `anexoSug` some
+(vira confirmado). Funções `_anexoSugerido`, `cnaeConfirmarSugeridos`; preenchido em
+massa por `import_anexo_sug.py` (preserva anexos já confirmados). **Deixado claro à
+Patrícia:** é sugestão pela regra geral; o enquadramento final é do escritório.
+
 ## Impacto operacional (no escritório)
 - A equipe vê, por empresa, as atividades com anexo e observação — classifica a nota
   certa e erra menos no enquadramento. Copiar CNPJ/IE limpo agiliza o dia a dia.

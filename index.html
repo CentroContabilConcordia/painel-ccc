@@ -2204,13 +2204,24 @@ function _copiaFallback(txt,cb){
 const CNAE_ANEXO_OPTS=['','Anexo I — Comércio','Anexo II — Indústria','Anexo III — Serviços','Anexo IV — Serviços','Anexo V — Serviços','Não se aplica'];
 function _escC(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function _escCa(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+// Sugestão de anexo pela regra geral da LC 123 (comércio→I, indústria→II, construção→IV, demais serviços→III). SEMPRE conferir.
+function _anexoSugerido(codigo){
+  const d=String(codigo||'').replace(/\D/g,'').slice(0,2); const div=parseInt(d,10);
+  if(isNaN(div)) return '';
+  if(div>=45&&div<=47) return 'Anexo I — Comércio';
+  if((div>=5&&div<=9)||(div>=10&&div<=33)) return 'Anexo II — Indústria';
+  if(div>=41&&div<=43) return 'Anexo IV — Serviços';
+  return 'Anexo III — Serviços';
+}
 function renderCnaesLista(ficha){
   const cn=ficha.cnaes||[]; const ed=isGestora();
   if(!cn.length) return `<div style="font-size:12px;color:var(--muted);padding:6px 0;">Nenhum CNAE ainda.${ed?' Serão puxados da Receita ou você pode adicionar manualmente.':''}</div>`;
+  const temSug=cn.some(c=>c.anexoSug===true);
   let linhas=cn.map((c,i)=>{
+    const sug=c.anexoSug===true;
     const anexoCel = ed
-      ? `<select class="ficha-select" style="min-width:150px;font-size:12px;" onchange="cnaeSet(${i},'anexo',this.value)">${CNAE_ANEXO_OPTS.map(o=>`<option value="${_escCa(o)}"${(c.anexo||'')===o?' selected':''}>${o||'—'}</option>`).join('')}</select>`
-      : `<span style="font-size:12px;">${_escC(c.anexo||'—')}</span>`;
+      ? `<select class="ficha-select" style="min-width:150px;font-size:12px;${sug?'background:#fef3c7;border-color:#f59e0b;':''}" onchange="cnaeSet(${i},'anexo',this.value)">${CNAE_ANEXO_OPTS.map(o=>`<option value="${_escCa(o)}"${(c.anexo||'')===o?' selected':''}>${o||'—'}</option>`).join('')}</select>${sug?' <span style="font-size:10px;color:#b45309;font-weight:600;" title="Preenchido automaticamente — confira">sugestão</span>':''}`
+      : `<span style="font-size:12px;">${_escC(c.anexo||'—')}${sug?' <span style="color:#b45309;font-size:10px;">(sugestão)</span>':''}</span>`;
     const obsCel = ed
       ? `<input class="ficha-input" style="min-width:220px;font-size:12px;" value="${_escCa(c.obs||'')}" placeholder="o que adequar / cuidado" onchange="cnaeSet(${i},'obs',this.value)"/>`
       : `<span style="font-size:12px;">${_escC(c.obs||'')}</span>`;
@@ -2226,10 +2237,12 @@ function renderCnaesLista(ficha){
       <td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center;">${delCel}</td>
     </tr>`;
   }).join('');
-  return `<div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;margin:4px 0;">
+  const aviso=temSug?`<div style="font-size:11px;color:#b45309;margin:4px 0 2px;">⚠️ Anexos em <strong>âmbar</strong> são <strong>sugestões automáticas</strong> — confira (principalmente serviços, por causa do Fator R) e confirme.</div>`:'';
+  const btnConf=(ed&&temSug)?`<button class="contato-add-btn" style="margin-top:6px;background:#fef3c7;border-color:#f59e0b;color:#92400e;" onclick="cnaeConfirmarSugeridos()">✓ Confirmar anexos sugeridos desta empresa</button>`:'';
+  return `${aviso}<div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;margin:4px 0;">
     <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;">
       <th style="text-align:left;padding:4px 6px;">CNAE / Atividade</th><th style="padding:4px 6px;">Principal</th><th style="text-align:left;padding:4px 6px;">Anexo Simples</th><th style="text-align:left;padding:4px 6px;">Observação</th><th></th>
-    </tr></thead><tbody>${linhas}</tbody></table></div>`;
+    </tr></thead><tbody>${linhas}</tbody></table></div>${btnConf}`;
 }
 function _cnaeRerender(){
   const el=document.getElementById('cnaes-lista');
@@ -2262,8 +2275,14 @@ async function cnaeSet(i,campo,val){
   if(!isGestora())return;
   const f=getFicha(empresaAtual); if(!f.cnaes||!f.cnaes[i])return;
   f.cnaes[i][campo]=val;
-  if(campo==='anexo')_cnaeDerivaAnexos(f);
+  if(campo==='anexo'){ f.cnaes[i].anexoSug=false; _cnaeDerivaAnexos(f); _cnaeRerender(); } // marcar manual = confirmado
   fichas[empresaAtual]=f; await saveFichas();
+}
+async function cnaeConfirmarSugeridos(){
+  if(!isGestora())return;
+  const f=getFicha(empresaAtual); if(!f.cnaes)return;
+  f.cnaes.forEach(c=>{ if(c.anexoSug) c.anexoSug=false; });
+  fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas(); toast('✓ Anexos confirmados');
 }
 async function cnaePrincipal(i){
   if(!isGestora())return;
