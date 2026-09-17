@@ -22,7 +22,10 @@ empresa × mês do ano:
 - **Filtros:** buscar empresa · só pendentes · por responsável.
 - Coluna da empresa e cabeçalho **fixos** ao rolar; grade rola na horizontal.
 - **Ao vivo e compartilhado** (kv_store `ccc_contab_anual_v1`); marcação **manual**
-  (clique). Todos veem/editam, como nos Processos.
+  (clique). **Permissão:** **todos visualizam** (inclusive o Fiscal, p/ acompanhar o
+  que está encerrado/pendente); **quem alimenta é o Contábil e as gestoras** — Fiscal
+  é **somente leitura** (`_caPodeEditar` = gestora ou setor contábil; guardas em
+  `caToggle`/`caObs`; aviso "👁️ Somente leitura" na barra).
 
 ### Importação inicial (uma vez)
 - **Meses (2025/2026):** de `Controle_Contabilidade_Mensal` — `CONF/OK/X` → ✅,
