@@ -2129,8 +2129,7 @@ function renderFicha(col){
             ${['Simples Nacional','Lucro Presumido','Lucro Real','MEI','Imune/Isenta'].map(r=>`<option${ficha.regime===r?' selected':''}>${r}</option>`).join('')}
           </select>
         </div>
-        <div class="ficha-campo"><div class="ficha-label">Alíquota / Faixa</div><input class="ficha-input" id="f-aliquota" value="${ficha.aliquota||''}" placeholder="Ex: 6%" ${ro}/></div>
-        <div class="ficha-campo"><div class="ficha-label">Período de Apuração</div>
+        <div class="ficha-campo" id="campo-periodo" style="${(ficha.regime==='Lucro Presumido'||ficha.regime==='Lucro Real')?'':'display:none'}"><div class="ficha-label">Período de Apuração</div>
           <select class="ficha-select" id="f-periodo" ${dis}>
             ${['Mensal','Trimestral','Anual'].map(p=>`<option${ficha.periodo===p?' selected':''}>${p}</option>`).join('')}
           </select>
@@ -2181,8 +2180,8 @@ function renderFicha(col){
 
 function atualizarAnexo(){
   const regime=document.getElementById('f-regime')?.value;
-  const campo=document.getElementById('campo-anexo');
-  if(campo) campo.style.display=regime==='Simples Nacional'?'':'none';
+  const cp=document.getElementById('campo-periodo');
+  if(cp) cp.style.display=(regime==='Lucro Presumido'||regime==='Lucro Real')?'':'none';
 }
 
 // ── Copiar CNPJ / Inscrição Estadual só com números (sem ponto, barra, traço) ──
@@ -2405,7 +2404,6 @@ async function salvarFicha(){
     const ult=ficha.regimeHist[ficha.regimeHist.length-1];
     ult.regime=ficha.regime; ult.anexos=_anexosChk.slice();
   }
-  ficha.aliquota=document.getElementById('f-aliquota')?.value||'';
   ficha.periodo=document.getElementById('f-periodo')?.value||'Mensal';
   // Salvar contatos dos inputs ativos
   const ficha2=getFicha(empresaAtual);
