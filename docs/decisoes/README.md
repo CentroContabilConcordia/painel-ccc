@@ -70,3 +70,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0024 — Mudança de tributação durante o ano (histórico de regime)](ADR-0024-mudanca-tributacao-durante-ano.md)
 - [ADR-0025 — Redução de tráfego de dados (egress) na sincronização](ADR-0025-reducao-de-trafego-egress.md)
 - [ADR-0026 — Controle Anual do Contábil (visão do ano por empresa/mês)](ADR-0026-controle-anual-contabil.md)
+- [ADR-0027 — Gestora responsável por empresa (a quem se reportar)](ADR-0027-gestora-responsavel-por-empresa.md)
