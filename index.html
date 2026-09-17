@@ -458,6 +458,8 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
   <div class="rel-wrap" id="painel-contabanual" style="display:none"></div>
   <style>
     .ca-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+    .btn-copia-num{flex-shrink:0;background:var(--surface3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;padding:5px 8px;line-height:1;}
+    .btn-copia-num:hover{border-color:var(--accent);background:var(--accent-light);}
     .ca-scroll{overflow:auto;max-height:calc(100vh - 210px);border:1px solid var(--border);border-radius:8px;}
     .ca-table{border-collapse:separate;border-spacing:0;font-size:13.5px;white-space:nowrap;background:var(--surface);width:100%;}
     .ca-table th:last-child,.ca-table td:last-child{width:100%;}
@@ -2023,7 +2025,7 @@ function renderContatosHTML(contatos, podeEditar, ro) {
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
 }
 // ── Histórico de tributação (mudança de regime durante o ano) ──
 // Cada segmento: {regime, desde:'AAAA-MM' (''=desde sempre), anexos:[]}
@@ -2077,11 +2079,11 @@ function renderFicha(col){
     <div class="ficha-section">
       <div class="ficha-section-titulo">Dados Cadastrais</div>
       <div class="ficha-grid">
-        <div class="ficha-campo"><div class="ficha-label">CNPJ</div><input class="ficha-input" id="f-cnpj" value="${ficha.cnpj||''}" placeholder="00.000.000/0001-00" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">CNPJ</div><div style="display:flex;gap:5px;align-items:center;"><input class="ficha-input" id="f-cnpj" value="${ficha.cnpj||''}" placeholder="00.000.000/0001-00" ${ro} style="flex:1;"/><button type="button" class="btn-copia-num" onclick="copiarSoNumeros('f-cnpj','CNPJ')" title="Copiar só os números">📋</button></div></div>
         <div class="ficha-campo"><div class="ficha-label">Data de Abertura</div><input class="ficha-input" id="f-abertura" type="date" value="${ficha.abertura||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">CNAE Principal</div><input class="ficha-input" id="f-cnae" value="${ficha.cnae||''}" placeholder="Ex: 6920-6/01" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Natureza Jurídica</div><input class="ficha-input" id="f-natureza" value="${ficha.natureza||''}" ${ro}/></div>
-        <div class="ficha-campo"><div class="ficha-label">Inscrição Estadual</div><input class="ficha-input" id="f-inscEstadual" value="${ficha.inscEstadual||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Inscrição Estadual</div><div style="display:flex;gap:5px;align-items:center;"><input class="ficha-input" id="f-inscEstadual" value="${ficha.inscEstadual||''}" ${ro} style="flex:1;"/><button type="button" class="btn-copia-num" onclick="copiarSoNumeros('f-inscEstadual','Inscrição Estadual')" title="Copiar só os números">📋</button></div></div>
         <div class="ficha-campo"><div class="ficha-label">Inscrição Municipal</div><input class="ficha-input" id="f-inscMunicipal" value="${ficha.inscMunicipal||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Telefone</div><input class="ficha-input" id="f-telefone" value="${ficha.telefone||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Município</div><input class="ficha-input" id="f-municipio" value="${ficha.municipio||''}" ${ro}/></div>
@@ -2127,18 +2129,17 @@ function renderFicha(col){
             ${['Simples Nacional','Lucro Presumido','Lucro Real','MEI','Imune/Isenta'].map(r=>`<option${ficha.regime===r?' selected':''}>${r}</option>`).join('')}
           </select>
         </div>
-        <div class="ficha-campo" id="campo-anexo" style="${ficha.regime==='Simples Nacional'?'':'display:none'}">
-          <div class="ficha-label">Anexos Simples Nacional <span style="font-weight:400;color:var(--muted);">(marque um ou mais)</span></div>
-          <div style="display:flex;flex-direction:column;gap:5px;padding:4px 0;">
-            ${ANEXOS.map(a=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:${podeEditar?'pointer':'default'};"><input type="checkbox" class="f-anexo-chk" value="${a}" ${anexosSel.includes(a)?'checked':''} ${dis}/> ${a}</label>`).join('')}
-          </div>
-        </div>
         <div class="ficha-campo"><div class="ficha-label">Alíquota / Faixa</div><input class="ficha-input" id="f-aliquota" value="${ficha.aliquota||''}" placeholder="Ex: 6%" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Período de Apuração</div>
           <select class="ficha-select" id="f-periodo" ${dis}>
             ${['Mensal','Trimestral','Anual'].map(p=>`<option${ficha.periodo===p?' selected':''}>${p}</option>`).join('')}
           </select>
         </div>
+      </div>
+      <div class="ficha-campo" id="campo-cnaes" style="margin-top:12px;">
+        <div class="ficha-label">Atividades (CNAEs) — anexo do Simples e observação por atividade <span style="font-weight:400;color:var(--muted);">(${podeEditar?'marque o anexo e a observação':'somente as gestoras editam'})</span></div>
+        <div id="cnaes-lista">${renderCnaesLista(ficha)}</div>
+        ${podeEditar?`<button class="contato-add-btn" onclick="cnaeAdd()">+ Adicionar CNAE</button>`:''}
       </div>
       ${regimeHistHTML(ficha, podeEditar)}
     </div>
@@ -2182,6 +2183,94 @@ function atualizarAnexo(){
   const regime=document.getElementById('f-regime')?.value;
   const campo=document.getElementById('campo-anexo');
   if(campo) campo.style.display=regime==='Simples Nacional'?'':'none';
+}
+
+// ── Copiar CNPJ / Inscrição Estadual só com números (sem ponto, barra, traço) ──
+function copiarSoNumeros(id,label){
+  const el=document.getElementById(id); if(!el)return;
+  const num=(el.value||'').replace(/\D/g,'');
+  if(!num){toast('Nada para copiar','#d97706');return;}
+  const ok=()=>toast('✓ '+label+' copiado (só números): '+num);
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(num).then(ok,()=>_copiaFallback(num,ok)); }
+    else _copiaFallback(num,ok);
+  }catch(e){ _copiaFallback(num,ok); }
+}
+function _copiaFallback(txt,cb){
+  try{const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');document.body.removeChild(ta);cb&&cb();}
+  catch(e){toast('Não consegui copiar','#dc2626');}
+}
+
+// ── Atividades (CNAEs) por empresa: anexo do Simples + observação (a equipe marca) ──
+const CNAE_ANEXO_OPTS=['','Anexo I — Comércio','Anexo II — Indústria','Anexo III — Serviços','Anexo IV — Serviços','Anexo V — Serviços','Não se aplica'];
+function _escC(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _escCa(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function renderCnaesLista(ficha){
+  const cn=ficha.cnaes||[]; const ed=isGestora();
+  if(!cn.length) return `<div style="font-size:12px;color:var(--muted);padding:6px 0;">Nenhum CNAE ainda.${ed?' Serão puxados da Receita ou você pode adicionar manualmente.':''}</div>`;
+  let linhas=cn.map((c,i)=>{
+    const anexoCel = ed
+      ? `<select class="ficha-select" style="min-width:150px;font-size:12px;" onchange="cnaeSet(${i},'anexo',this.value)">${CNAE_ANEXO_OPTS.map(o=>`<option value="${_escCa(o)}"${(c.anexo||'')===o?' selected':''}>${o||'—'}</option>`).join('')}</select>`
+      : `<span style="font-size:12px;">${_escC(c.anexo||'—')}</span>`;
+    const obsCel = ed
+      ? `<input class="ficha-input" style="min-width:220px;font-size:12px;" value="${_escCa(c.obs||'')}" placeholder="o que adequar / cuidado" onchange="cnaeSet(${i},'obs',this.value)"/>`
+      : `<span style="font-size:12px;">${_escC(c.obs||'')}</span>`;
+    const princCel = ed
+      ? `<input type="radio" name="cnae-principal" ${c.principal?'checked':''} onclick="cnaePrincipal(${i})" title="Marcar como principal"/>`
+      : (c.principal?'⭐':'');
+    const delCel = ed?`<button class="obs-del" onclick="cnaeDel(${i})" title="Remover">✕</button>`:'';
+    return `<tr>
+      <td style="padding:5px 6px;border-bottom:1px solid var(--border);font-size:12px;">${c.principal?'<span title="Principal" style="color:var(--accent)">⭐</span> ':''}<strong>${_escC(c.codigo||'')}</strong> ${_escC(c.desc||'')}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center;">${princCel}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid var(--border);">${anexoCel}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid var(--border);">${obsCel}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center;">${delCel}</td>
+    </tr>`;
+  }).join('');
+  return `<div style="overflow-x:auto;"><table style="border-collapse:collapse;width:100%;margin:4px 0;">
+    <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;">
+      <th style="text-align:left;padding:4px 6px;">CNAE / Atividade</th><th style="padding:4px 6px;">Principal</th><th style="text-align:left;padding:4px 6px;">Anexo Simples</th><th style="text-align:left;padding:4px 6px;">Observação</th><th></th>
+    </tr></thead><tbody>${linhas}</tbody></table></div>`;
+}
+function _cnaeRerender(){
+  const el=document.getElementById('cnaes-lista');
+  if(el && empresaAtual) el.innerHTML=renderCnaesLista(getFicha(empresaAtual));
+}
+function _cnaeDerivaAnexos(ficha){
+  const set=[]; (ficha.cnaes||[]).forEach(c=>{ const a=c.anexo; if(a && a!=='Não se aplica' && !set.includes(a)) set.push(a); });
+  ficha.anexos=set; ficha.anexo=set.join(', ');
+}
+async function cnaeAdd(){
+  if(!isGestora()){toast('Só as gestoras editam o regime tributário','#dc2626');return;}
+  if(!empresaAtual)return;
+  const cod=(prompt('Código do CNAE (ex.: 4744-0/01):','')||'').trim();
+  if(!cod)return;
+  const desc=(prompt('Descrição da atividade:','')||'').trim();
+  const f=getFicha(empresaAtual); if(!f.cnaes)f.cnaes=[];
+  f.cnaes.push({codigo:cod,desc:desc,principal:f.cnaes.length===0,anexo:'',obs:''});
+  fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas();
+}
+async function cnaeDel(i){
+  if(!isGestora())return;
+  const f=getFicha(empresaAtual); if(!f.cnaes||!f.cnaes[i])return;
+  if(!confirm('Remover este CNAE?'))return;
+  const eraPrinc=f.cnaes[i].principal;
+  f.cnaes.splice(i,1);
+  if(eraPrinc && f.cnaes.length) f.cnaes[0].principal=true;
+  _cnaeDerivaAnexos(f); fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas();
+}
+async function cnaeSet(i,campo,val){
+  if(!isGestora())return;
+  const f=getFicha(empresaAtual); if(!f.cnaes||!f.cnaes[i])return;
+  f.cnaes[i][campo]=val;
+  if(campo==='anexo')_cnaeDerivaAnexos(f);
+  fichas[empresaAtual]=f; await saveFichas();
+}
+async function cnaePrincipal(i){
+  if(!isGestora())return;
+  const f=getFicha(empresaAtual); if(!f.cnaes||!f.cnaes[i])return;
+  f.cnaes.forEach((c,j)=>c.principal=(j===i));
+  fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas();
 }
 
 // ── Histórico de tributação: linha do tempo + registrar/excluir mudança ──
@@ -2308,9 +2397,9 @@ async function salvarFicha(){
   ficha.respContabil=document.getElementById('f-respContabil')?.value||'';
   ficha.gestora=document.getElementById('f-gestora')?.value||'';
   ficha.regime=document.getElementById('f-regime')?.value||'Simples Nacional';
-  const _anexosChk=[...document.querySelectorAll('.f-anexo-chk:checked')].map(c=>c.value);
-  ficha.anexos=_anexosChk;
-  ficha.anexo=_anexosChk.join(', '); // mantem compat (relatorio/texto)
+  // Os anexos agora vêm da lista de CNAEs (derivados p/ compat com relatórios)
+  _cnaeDerivaAnexos(ficha);
+  const _anexosChk=(ficha.anexos||[]).slice();
   // Se ha linha do tempo de tributacao, o campo Regime edita o segmento ATUAL (ultimo)
   if(ficha.regimeHist&&ficha.regimeHist.length){
     const ult=ficha.regimeHist[ficha.regimeHist.length-1];
