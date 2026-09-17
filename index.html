@@ -1128,7 +1128,7 @@ async function iniciarApp(){
         try{
           if(todos||keys.has(SK)){ await loadDB(); if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas(); }
           if(todos||keys.has(SK_PROCESSOS)){ await loadProcessos(); if(viewAtual==='processos' && !_procEditando)renderProcessos(); }
-          if(todos||keys.has(SK_CONTAB_ANUAL)){ await loadContabAnual(); if(viewAtual==='contabanual')renderContabAnual(); }
+          if(todos||keys.has(SK_CONTAB_ANUAL)){ await loadContabAnual(); if(viewAtual==='contabanual'){ if(document.getElementById('ca-tablehost'))renderCaTable(); else renderContabAnual(); } }
           if(todos||keys.has(SK_EMPRESAS_CAD)){ await loadEmpresasCad(); }
           if(todos||keys.has(SK_COLAB)){ await loadColaboradores(); }
         }catch(e){ console.warn('[CCC] atualizacao em tempo real falhou', e); }
