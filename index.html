@@ -2223,7 +2223,7 @@ function renderCnaesLista(ficha){
       ? `<select class="ficha-select" style="min-width:150px;font-size:12px;${sug?'background:#fef3c7;border-color:#f59e0b;':''}" onchange="cnaeSet(${i},'anexo',this.value)">${CNAE_ANEXO_OPTS.map(o=>`<option value="${_escCa(o)}"${(c.anexo||'')===o?' selected':''}>${o||'—'}</option>`).join('')}</select>${sug?' <span style="font-size:10px;color:#b45309;font-weight:600;" title="Preenchido automaticamente — confira">sugestão</span>':''}`
       : `<span style="font-size:12px;">${_escC(c.anexo||'—')}${sug?' <span style="color:#b45309;font-size:10px;">(sugestão)</span>':''}</span>`;
     const obsCel = ed
-      ? `<input class="ficha-input" style="min-width:220px;font-size:12px;" value="${_escCa(c.obs||'')}" placeholder="o que adequar / cuidado" onchange="cnaeSet(${i},'obs',this.value)"/>`
+      ? `<input class="ficha-input" style="min-width:360px;width:100%;font-size:12px;" value="${_escCa(c.obs||'')}" placeholder="o que adequar / cuidado" onchange="cnaeSet(${i},'obs',this.value)"/>`
       : `<span style="font-size:12px;">${_escC(c.obs||'')}</span>`;
     const princCel = ed
       ? `<input type="radio" name="cnae-principal" ${c.principal?'checked':''} onclick="cnaePrincipal(${i})" title="Marcar como principal"/>`
@@ -2233,7 +2233,7 @@ function renderCnaesLista(ficha){
       <td style="padding:5px 6px;border-bottom:1px solid var(--border);font-size:12px;">${c.principal?'<span title="Principal" style="color:var(--accent)">⭐</span> ':''}<strong>${_escC(c.codigo||'')}</strong> ${_escC(c.desc||'')}</td>
       <td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center;">${princCel}</td>
       <td style="padding:5px 6px;border-bottom:1px solid var(--border);">${anexoCel}</td>
-      <td style="padding:5px 6px;border-bottom:1px solid var(--border);">${obsCel}</td>
+      <td style="padding:5px 6px;border-bottom:1px solid var(--border);width:100%;">${obsCel}</td>
       <td style="padding:5px 6px;border-bottom:1px solid var(--border);text-align:center;">${delCel}</td>
     </tr>`;
   }).join('');
