@@ -1003,7 +1003,12 @@ function novasTarefasMes(setor,mk,emp,mes){
   const pad=setor==='fiscal'?PAD_FISCAL:PAD_CONTABIL;
   // No mês de virada de regime, NÃO herda o "não se aplica" do regime antigo — começa limpo.
   const na=ehMesDeVirada(emp,mes)?new Set():statusNaAnterior(setor,mk,emp,mes);
-  return pad.map(tp=>({id:nextId++,desc:tp.desc,area:tp.area,status:na.has(tp.desc)?'naoseaplica':'pendente'}));
+  const dirbiObrig=(fichas[emp]||{}).dirbi===true; // só as empresas obrigadas fazem DIRBI
+  return pad.map(tp=>{
+    let status=na.has(tp.desc)?'naoseaplica':'pendente';
+    if(tp.desc==='DIRBI' && !dirbiObrig) status='naoseaplica'; // demais empresas: DIRBI não se aplica
+    return {id:nextId++,desc:tp.desc,area:tp.area,status};
+  });
 }
 
 // ESTADO

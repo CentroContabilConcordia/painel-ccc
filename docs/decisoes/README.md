@@ -72,3 +72,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0026 — Controle Anual do Contábil (visão do ano por empresa/mês)](ADR-0026-controle-anual-contabil.md)
 - [ADR-0027 — Gestora responsável por empresa (a quem se reportar)](ADR-0027-gestora-responsavel-por-empresa.md)
 - [ADR-0028 — Ficha: Atividades (CNAEs) por empresa + copiar CNPJ/IE só números](ADR-0028-atividades-cnaes-e-copiar-numeros.md)
+- [ADR-0029 — DIRBI só para as empresas obrigadas](ADR-0029-dirbi-so-obrigadas.md)
