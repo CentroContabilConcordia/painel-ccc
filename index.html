@@ -1234,7 +1234,7 @@ function criarEmpItem(emp,setor,mk,cor){
   const pct=total>0?Math.round(ok/total*100):0,temAtrasado=tarefas.some(t=>t.status==='atrasado');
   const respM=responsavel?TODOS_MEMBROS.find(x=>x.id===responsavel):null;
   const div=document.createElement('div');div.className='emp-item'+(empresaAtual===emp?' active':'');
-  div.addEventListener('click',()=>selecionarEmpresa(emp));
+  div.addEventListener('click',()=>{ if(setor==='fiscal'&&mk){membroAtual=mk;renderMembros();} selecionarEmpresa(emp); });
   let html=`<div class="emp-nome"${temAtrasado?' style="color:var(--red)"':''}>${emp}${temAtrasado?' ⚠️':''}${!empAtiva(emp)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;">INATIVA</span>':''}</div>`;
   const _g=getFicha(emp).gestora, _gu=(_g&&USUARIOS[_g])?USUARIOS[_g]:null;
   if(_gu)html+=`<div style="font-size:10px;font-weight:600;color:${_gu.cor};margin-top:2px;">👤 Gestora: ${_gu.nome}</div>`;
@@ -1242,7 +1242,35 @@ function criarEmpItem(emp,setor,mk,cor){
   if(total>0)html+=`<div class="emp-meta"><span>${ok}/${total} ok</span><span>${pct}%</span></div><div class="emp-prog"><div class="emp-prog-f" style="width:${pct}%;background:${cor}"></div></div>`;
   div.innerHTML=html;return div;
 }
-function buscarEmp(val){empFiltro=val;if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();}
+// Busca GERAL no fiscal: procura em todas as carteiras, sem precisar escolher a pessoa.
+function renderEmpresasFiscalGlobal(termo){
+  const el=document.getElementById('emp-lista');el.innerHTML='';
+  const t=termo.toLowerCase();const vistos=new Set();let n=0;
+  MEMBROS_FISCAL.forEach(m=>{
+    let emps=m.empresas.filter(e=>e.toLowerCase().includes(t));
+    if(!mostrarInativas)emps=emps.filter(empAtiva);
+    emps.forEach(emp=>{
+      if(vistos.has(emp))return;vistos.add(emp);
+      const item=criarEmpItem(emp,'fiscal',m.id,m.cor);
+      const tag=document.createElement('div');tag.style='font-size:10px;color:var(--muted);margin-top:2px;';tag.textContent='▶ Faz: '+m.nome;
+      item.insertBefore(tag,item.children[1]||null);
+      el.appendChild(item);n++;
+    });
+  });
+  document.getElementById('col2-titulo').textContent='Busca em todas';
+  document.getElementById('col2-count').textContent=n+' resultado'+(n===1?'':'s');
+  if(n===0)el.innerHTML='<div class="vazio" style="padding:22px;">Nenhuma empresa encontrada</div>';
+}
+function buscarEmp(val){
+  empFiltro=val;
+  if(setorAtual!=='fiscal'){renderEmpresasContabil();return;}
+  if(val&&val.trim()){renderEmpresasFiscalGlobal(val.trim());}
+  else if(membroAtual){renderEmpresasFiscal();}
+  else{
+    document.getElementById('emp-lista').innerHTML='<div class="vazio" style="padding:22px;">← Selecione uma pessoa<br>ou digite para buscar em todas</div>';
+    document.getElementById('col2-titulo').textContent='Selecione';document.getElementById('col2-count').textContent='';
+  }
+}
 function toggleMostrarInativas(v){mostrarInativas=v;if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();}
 function selecionarEmpresa(emp){
   empresaAtual=emp;verHistorico=false;abaEmpresa='ficha';_obsNovaImgs=[];
