@@ -1235,8 +1235,11 @@ function criarEmpItem(emp,setor,mk,cor){
   const respM=responsavel?TODOS_MEMBROS.find(x=>x.id===responsavel):null;
   const div=document.createElement('div');div.className='emp-item'+(empresaAtual===emp?' active':'');
   div.addEventListener('click',()=>{ if(setor==='fiscal'&&mk){membroAtual=mk;renderMembros();} selecionarEmpresa(emp); });
-  let html=`<div class="emp-nome"${temAtrasado?' style="color:var(--red)"':''}>${emp}${temAtrasado?' ⚠️':''}${!empAtiva(emp)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;">INATIVA</span>':''}</div>`;
-  const _g=getFicha(emp).gestora, _gu=(_g&&USUARIOS[_g])?USUARIOS[_g]:null;
+  const _f=getFicha(emp);
+  const _fil=_f.filial===true?` <span style="font-size:9px;background:#0891b222;color:#0891b2;padding:1px 5px;border-radius:4px;font-weight:700;vertical-align:middle;">FILIAL</span>`:'';
+  let html=`<div class="emp-nome"${temAtrasado?' style="color:var(--red)"':''}>${emp}${_fil}${temAtrasado?' ⚠️':''}${!empAtiva(emp)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;">INATIVA</span>':''}</div>`;
+  if(_f.filial===true && _f.municipio)html+=`<div style="font-size:10px;color:var(--muted);margin-top:2px;">📍 ${_f.municipio}${_f.estado?'/'+_f.estado:''}</div>`;
+  const _g=_f.gestora, _gu=(_g&&USUARIOS[_g])?USUARIOS[_g]:null;
   if(_gu)html+=`<div style="font-size:10px;font-weight:600;color:${_gu.cor};margin-top:2px;">👤 Gestora: ${_gu.nome}</div>`;
   if(setor==='contabil'&&respM)html+=`<div class="emp-resp-tag">▶ ${respM.nome}</div>`;
   if(total>0)html+=`<div class="emp-meta"><span>${ok}/${total} ok</span><span>${pct}%</span></div><div class="emp-prog"><div class="emp-prog-f" style="width:${pct}%;background:${cor}"></div></div>`;

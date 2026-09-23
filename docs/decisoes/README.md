@@ -74,3 +74,4 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0028 — Ficha: Atividades (CNAEs) por empresa + copiar CNPJ/IE só números](ADR-0028-atividades-cnaes-e-copiar-numeros.md)
 - [ADR-0029 — DIRBI só para as empresas obrigadas](ADR-0029-dirbi-so-obrigadas.md)
 - [ADR-0030 — Tributos por CNAE no Lucro Presumido/Real (PIS/COFINS/IRPJ/CSLL/ISS)](ADR-0030-tributos-por-cnae-lp-lr.md)
+- [ADR-0031 — Filiais como empresas separadas](ADR-0031-filiais-como-empresas-separadas.md)
