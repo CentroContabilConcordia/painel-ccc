@@ -2062,7 +2062,7 @@ function renderContatosHTML(contatos, podeEditar, ro) {
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
 }
 // ── Histórico de tributação (mudança de regime durante o ano) ──
 // Cada segmento: {regime, desde:'AAAA-MM' (''=desde sempre), anexos:[]}
@@ -2171,6 +2171,13 @@ function renderFicha(col){
             ${['Mensal','Trimestral','Anual'].map(p=>`<option${ficha.periodo===p?' selected':''}>${p}</option>`).join('')}
           </select>
         </div>
+        <div class="ficha-campo"><div class="ficha-label">Importação dos arquivos (fiscal)</div>
+          <select class="ficha-select" id="f-importacao" ${dis}>
+            <option value="">— Selecione —</option>
+            ${['Sped','Sintegra','XML','Automação Zen','Outro'].map(o=>`<option${ficha.importacao===o?' selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="ficha-campo"><div class="ficha-label">Observação (importação)</div><input class="ficha-input" id="f-importacaoObs" value="${_escAttrP(ficha.importacaoObs||'')}" placeholder="detalhes da importação" ${ro}/></div>
       </div>
       <div class="ficha-campo" id="campo-cnaes" style="margin-top:12px;">
         <div class="ficha-label">Atividades (CNAEs) — anexo do Simples e observação por atividade <span style="font-weight:400;color:var(--muted);">(${podeEditar?'marque o anexo e a observação':'somente as gestoras editam'})</span></div>
@@ -2479,6 +2486,8 @@ async function salvarFicha(){
   ficha.respFiscal=document.getElementById('f-respFiscal')?.value||'';
   ficha.respContabil=document.getElementById('f-respContabil')?.value||'';
   ficha.gestora=document.getElementById('f-gestora')?.value||'';
+  ficha.importacao=document.getElementById('f-importacao')?.value||'';
+  ficha.importacaoObs=document.getElementById('f-importacaoObs')?.value||'';
   ficha.regime=document.getElementById('f-regime')?.value||'Simples Nacional';
   // Os anexos agora vêm da lista de CNAEs (derivados p/ compat com relatórios)
   _cnaeDerivaAnexos(ficha);
