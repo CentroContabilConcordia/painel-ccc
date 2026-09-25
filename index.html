@@ -2171,6 +2171,14 @@ function renderFicha(col){
             ${['Mensal','Trimestral','Anual'].map(p=>`<option${ficha.periodo===p?' selected':''}>${p}</option>`).join('')}
           </select>
         </div>
+      </div>
+      <div class="ficha-campo" id="campo-cnaes" style="margin-top:12px;">
+        <div class="ficha-label">Atividades (CNAEs) — anexo do Simples e observação por atividade <span style="font-weight:400;color:var(--muted);">(${podeEditar?'marque o anexo e a observação':'somente as gestoras editam'})</span></div>
+        <div id="cnaes-lista">${renderCnaesLista(ficha)}</div>
+        ${podeEditar?`<button class="contato-add-btn" onclick="cnaeAdd()">+ Adicionar CNAE</button>`:''}
+      </div>
+      ${regimeHistHTML(ficha, podeEditar)}
+      <div class="ficha-grid" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
         <div class="ficha-campo"><div class="ficha-label">Importação dos arquivos (fiscal)</div>
           <select class="ficha-select" id="f-importacao" ${dis}>
             <option value="">— Selecione —</option>
@@ -2179,12 +2187,6 @@ function renderFicha(col){
         </div>
         <div class="ficha-campo"><div class="ficha-label">Observação (importação)</div><input class="ficha-input" id="f-importacaoObs" value="${_escAttrP(ficha.importacaoObs||'')}" placeholder="detalhes da importação" ${ro}/></div>
       </div>
-      <div class="ficha-campo" id="campo-cnaes" style="margin-top:12px;">
-        <div class="ficha-label">Atividades (CNAEs) — anexo do Simples e observação por atividade <span style="font-weight:400;color:var(--muted);">(${podeEditar?'marque o anexo e a observação':'somente as gestoras editam'})</span></div>
-        <div id="cnaes-lista">${renderCnaesLista(ficha)}</div>
-        ${podeEditar?`<button class="contato-add-btn" onclick="cnaeAdd()">+ Adicionar CNAE</button>`:''}
-      </div>
-      ${regimeHistHTML(ficha, podeEditar)}
     </div>
 
     <div class="ficha-section">
