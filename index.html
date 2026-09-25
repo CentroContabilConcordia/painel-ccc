@@ -2185,7 +2185,7 @@ function renderFicha(col){
             ${['Sped','Sintegra','XML','Automação Zen','Outro'].map(o=>`<option${ficha.importacao===o?' selected':''}>${o}</option>`).join('')}
           </select>
         </div>
-        <div class="ficha-campo"><div class="ficha-label">Observação (importação)</div><input class="ficha-input" id="f-importacaoObs" value="${_escAttrP(ficha.importacaoObs||'')}" placeholder="detalhes da importação" ${ro}/></div>
+        <div class="ficha-campo" style="grid-column:1/-1;"><div class="ficha-label">Observação (importação)</div><textarea class="ficha-input" id="f-importacaoObs" rows="3" style="width:100%;resize:vertical;line-height:1.4;" placeholder="detalhes da importação" ${ro}>${_escP(ficha.importacaoObs||'')}</textarea></div>
       </div>
     </div>
 
