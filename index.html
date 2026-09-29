@@ -793,7 +793,6 @@ let processos=[]; let _procFiltro=''; let _procEditando=null; let _procImgs=[]; 
 let contabAnual={}; let _caAno='2026'; let _caBusca=''; let _caSoPend=false; let _caRespFiltro='';
 let db={};let nextId=1;
 let fichas={};
-let fiscalOwnerDe={}; // emp -> fiscal_owner ATUAL (base p/ quem não tem histórico de transferência)
 let empresasCad={}; // empresasCad[nome] = {setor, responsavelFiscal, responsavelContabil, ...dados ficha}
 let colaboradores={}; // colaboradores[id] = {nome, cargo, setor, email, dataEntrada, ativo, senha}  // fichas[empresa] = {cnpj, regime, anexo, cnae, respFiscal, respContabil, abertura, obs:[{id,texto}]}
 let bancosCad={}; // bancosCad[empresa] = [{id,nome,agencia,conta}]
@@ -821,15 +820,13 @@ async function loadRef(){
   try{
     const lista = await window.Backend.getEmpresas(); // [{nome, fiscal_owner, ficha, bancos}]
     const byOwner = {cris:[],cleo:[],julia:[],gab:[]};
-    const todas = []; const f = {}; const bk = {}; const fod = {};
+    const todas = []; const f = {}; const bk = {};
     lista.forEach(e=>{
       todas.push(e.nome);
       if(e.fiscal_owner && byOwner[e.fiscal_owner]) byOwner[e.fiscal_owner].push(e.nome);
-      if(e.fiscal_owner) fod[e.nome] = e.fiscal_owner;
       if(e.ficha && Object.keys(e.ficha).length) f[e.nome] = e.ficha;
       if(e.bancos && e.bancos.length) bk[e.nome] = e.bancos;
     });
-    fiscalOwnerDe = fod;
     const fill=(arr,vals)=>{arr.length=0;vals.forEach(v=>arr.push(v));};
     fill(EMP_CRIS,byOwner.cris); fill(EMP_CLEO,byOwner.cleo); fill(EMP_JULIA,byOwner.julia); fill(EMP_GAB,byOwner.gab);
     fill(TODAS_EMPRESAS, todas.sort((a,b)=>a.localeCompare(b,'pt')));
@@ -1023,28 +1020,7 @@ let abaEmpresa='tarefas'; // 'tarefas' | 'ficha' | 'bancos'
 function mesKeyFn(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
 function mesLabel(k){const[y,m]=k.split('-');return `${MESES[parseInt(m)-1]}/${y}`;}
 function _mesAnteriorKey(mk){const[y,m]=mk.split('-').map(Number);return mesKeyFn(new Date(y,m-2,1));}
-// ── Responsável fiscal POR MÊS (transferência de empresa com data) ──
-// ficha.respHist = [{resp:'julia',desde:''},{resp:'cris',desde:'2026-09'}] (último = dono atual)
-function ownerNoMes(emp,mesKey){
-  const h=(fichas[emp]||{}).respHist;
-  if(h&&h.length){
-    // ordena por 'desde' (vazio = mais antigo) e pega a última faixa que já começou até o mês
-    const arr=h.slice().sort((a,b)=>String(a.desde||'').localeCompare(String(b.desde||'')));
-    let r=arr[0].resp;
-    for(const s of arr){ if(!s.desde||s.desde<=mesKey) r=s.resp; }
-    return r;
-  }
-  return fiscalOwnerDe[emp]||null; // sem transferência = dono atual
-}
-// Empresas de um membro fiscal NO MÊS indicado (considera as transferências)
-function empresasDoMembro(mkId,mesKey){
-  return TODAS_EMPRESAS.filter(e=>ownerNoMes(e,mesKey)===mkId);
-}
-function getMembroKey(){
-  if(setorAtual!=='fiscal')return 'contabil';
-  if(empresaAtual){ const o=ownerNoMes(empresaAtual,mesAtual); if(o)return o; } // tarefas ficam com o dono do mês
-  return membroAtual;
-}
+function getMembroKey(){return setorAtual==='fiscal'?membroAtual:'contabil';}
 function isGestora(){return usuarioAtual&&USUARIOS[usuarioAtual].role==='gestora';}
 
 // LOGIN
@@ -1211,7 +1187,7 @@ function trocarView(v,btn){
     if(!isGestora()&&u.setor==='fiscal'){
       membroAtual=usuarioAtual;renderMembros();
       const m=MEMBROS_FISCAL.find(x=>x.id===usuarioAtual);
-      if(m){document.getElementById('col2-titulo').textContent=m.nome;document.getElementById('col2-count').textContent=empresasDoMembro(m.id,mesAtual).length+' empresas';document.getElementById('emp-busca').value='';empFiltro='';renderEmpresasFiscal();}
+      if(m){document.getElementById('col2-titulo').textContent=m.nome;document.getElementById('col2-count').textContent=m.empresas.length+' empresas';document.getElementById('emp-busca').value='';empFiltro='';renderEmpresasFiscal();}
     } else {renderMembros();document.getElementById('col2-titulo').textContent='Selecione';document.getElementById('col2-count').textContent='';document.getElementById('emp-lista').innerHTML='<div class="vazio" style="padding:22px;">← Selecione uma pessoa</div>';}
   }
   document.getElementById('col-tarefas').innerHTML='<div class="placeholder"><div class="ico">📋</div><p>Selecione uma empresa<br>para ver as tarefas do mês</p></div>';
@@ -1224,7 +1200,7 @@ function renderMembros(){
   visiveis.forEach(m=>{
     const div=document.createElement('div');div.className='membro-btn'+(membroAtual===m.id?' active':'');
     div.onclick=()=>selecionarMembro(m.id);
-    div.innerHTML=`<div class="mavatar" style="background:${m.cor}">${m.nome[0]}</div><div class="minfo2"><div class="mn">${m.nome}</div>${m.licenca?'<span class="licenca-pill">Licença</span>':`<div class="mt">${empresasDoMembro(m.id,mesAtual).length} emp.</div>`}</div>`;
+    div.innerHTML=`<div class="mavatar" style="background:${m.cor}">${m.nome[0]}</div><div class="minfo2"><div class="mn">${m.nome}</div>${m.licenca?'<span class="licenca-pill">Licença</span>':`<div class="mt">${m.empresas.length} emp.</div>`}</div>`;
     el.appendChild(div);
   });
 }
@@ -1233,7 +1209,7 @@ function selecionarMembro(id){
   membroAtual=id;empresaAtual=null;verHistorico=false;renderMembros();
   const m=MEMBROS_FISCAL.find(x=>x.id===id);
   document.getElementById('col2-titulo').textContent=m.nome;
-  document.getElementById('col2-count').textContent=empresasDoMembro(m.id,mesAtual).length+' empresas';
+  document.getElementById('col2-count').textContent=m.empresas.length+' empresas';
   document.getElementById('emp-busca').value='';empFiltro='';renderEmpresasFiscal();
   document.getElementById('col-tarefas').innerHTML='<div class="placeholder"><div class="ico">🏢</div><p>Selecione uma empresa</p></div>';
 }
@@ -1241,8 +1217,7 @@ function selecionarMembro(id){
 function renderEmpresasFiscal(){
   const m=MEMBROS_FISCAL.find(x=>x.id===membroAtual);if(!m)return;
   const el=document.getElementById('emp-lista');el.innerHTML='';
-  const carteira=empresasDoMembro(m.id,mesAtual);
-  let lista=empFiltro?carteira.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):carteira.slice();
+  let lista=empFiltro?m.empresas.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):m.empresas.slice();
   if(!mostrarInativas)lista=lista.filter(empAtiva);
   if(lista.length===0){el.innerHTML='<div class="vazio">Nenhuma encontrada</div>';return;}
   lista.forEach(emp=>el.appendChild(criarEmpItem(emp,'fiscal',m.id,m.cor)));
@@ -1263,8 +1238,7 @@ function criarEmpItem(emp,setor,mk,cor){
   div.addEventListener('click',()=>{ if(setor==='fiscal'&&mk){membroAtual=mk;renderMembros();} selecionarEmpresa(emp); });
   const _f=getFicha(emp);
   const _fil=_f.filial===true?` <span style="font-size:9px;background:#0891b222;color:#0891b2;padding:1px 5px;border-radius:4px;font-weight:700;vertical-align:middle;">FILIAL</span>`:'';
-  const _cq=_f.codigoQuestor?` <span style="font-size:9px;font-family:monospace;background:#eef2ff;color:#4338ca;padding:1px 5px;border-radius:4px;font-weight:700;vertical-align:middle;" title="Número da empresa no Questor">Q ${_f.codigoQuestor}</span>`:'';
-  let html=`<div class="emp-nome"${temAtrasado?' style="color:var(--red)"':''}>${emp}${_cq}${_fil}${temAtrasado?' ⚠️':''}${!empAtiva(emp)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;">INATIVA</span>':''}</div>`;
+  let html=`<div class="emp-nome"${temAtrasado?' style="color:var(--red)"':''}>${emp}${_fil}${temAtrasado?' ⚠️':''}${!empAtiva(emp)?' <span style="font-size:9px;background:#fee2e2;color:#b91c1c;padding:1px 5px;border-radius:4px;font-weight:600;vertical-align:middle;">INATIVA</span>':''}</div>`;
   if(_f.filial===true && _f.municipio)html+=`<div style="font-size:10px;color:var(--muted);margin-top:2px;">📍 ${_f.municipio}${_f.estado?'/'+_f.estado:''}</div>`;
   const _g=_f.gestora, _gu=(_g&&USUARIOS[_g])?USUARIOS[_g]:null;
   if(_gu)html+=`<div style="font-size:10px;font-weight:600;color:${_gu.cor};margin-top:2px;">👤 Gestora: ${_gu.nome}</div>`;
@@ -1277,7 +1251,7 @@ function renderEmpresasFiscalGlobal(termo){
   const el=document.getElementById('emp-lista');el.innerHTML='';
   const t=termo.toLowerCase();const vistos=new Set();let n=0;
   MEMBROS_FISCAL.forEach(m=>{
-    let emps=empresasDoMembro(m.id,mesAtual).filter(e=>e.toLowerCase().includes(t));
+    let emps=m.empresas.filter(e=>e.toLowerCase().includes(t));
     if(!mostrarInativas)emps=emps.filter(empAtiva);
     emps.forEach(emp=>{
       if(vistos.has(emp))return;vistos.add(emp);
@@ -1315,72 +1289,6 @@ function selecionarEmpresa(emp){
 
 // Evita redesenhar a tela enquanto a pessoa está digitando (não apaga o que ela escreveu).
 function _editando(){ const a=document.activeElement; return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); }
-// ══ PRAZOS das tarefas: vencimento por obrigação + atraso + data de conclusão ══
-const PRAZO_CONFIG={
-  'Simples Nacional (PGDAS-D)':{dia:20,off:1},
-  'Apuração ICMS':{dia:10,off:1},
-  'Apuração ICMS-ST':{dia:10,off:2},
-  'Apuração DIFAL':{dia:10,off:2},
-  'Apuração PIS / COFINS':{dia:25,off:1},
-  'Apuração IRPJ / CSLL':{ultimoUtil:true,off:1},
-  'Apuração ISS':{dia:15,off:1},
-  'INSS Retido':{dia:20,off:1,antecipa:true},
-  'Funrural':{dia:20,off:1,antecipa:true},
-  'Retenções Federais':{ultimoUtil:true,off:1},
-  'DIME':{dia:10,off:1},
-  'GIA':{dia:10,off:1},
-  'SPED Fiscal (EFD ICMS/IPI)':{dia:20,off:1},
-  'EFD Contribuições':{dia:14,off:1},
-  'DCTF':{dia:15,off:1},
-  'EFD-Reinf':{dia:15,off:1},
-  'DeSTDA':{dia:28,off:1},
-  'DIRBI':{dia:20,off:1},
-};
-const PRAZO_AREA_ULTIMODIA=['Controle de Documentos','Fechamentos Fiscais'];
-function _ymd(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
-function _hojeYMD(){return _ymd(new Date());}
-function _ddmm(d){return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2);}
-function _pascoa(ano){const a=ano%19,b=Math.floor(ano/100),c=ano%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,mm=Math.floor((a+11*h+22*l)/451),mes=Math.floor((h+l-7*mm+114)/31),dia=((h+l-7*mm+114)%31)+1;return new Date(ano,mes-1,dia);}
-const _ferCache={};
-function _feriadosAno(ano){
-  if(_ferCache[ano])return _ferCache[ano];
-  const p=_pascoa(ano); const o=(n)=>{const x=new Date(p);x.setDate(x.getDate()+n);return _ymd(x);};
-  const s=new Set([ano+'-01-01',ano+'-04-21',ano+'-05-01',ano+'-09-07',ano+'-10-12',ano+'-11-02',ano+'-11-15',ano+'-12-25',o(-48),o(-47),o(-2),o(60)]);
-  _ferCache[ano]=s; return s;
-}
-function _diaUtil(d){const wd=d.getDay();return wd!==0&&wd!==6&&!_feriadosAno(d.getFullYear()).has(_ymd(d));}
-function _ajustaUtil(d,antecipa){let x=new Date(d),g=0;while(!_diaUtil(x)&&g<25){x.setDate(x.getDate()+(antecipa?-1:1));g++;}return x;}
-function prazoDaTarefa(desc,area,mesKey){
-  if(!mesKey)return null;
-  const [y,m]=mesKey.split('-').map(Number); if(!y||!m)return null;
-  let cfg=PRAZO_CONFIG[desc];
-  if(!cfg){ if(PRAZO_AREA_ULTIMODIA.includes(area))cfg={ultimoDiaMes:true,off:1}; else return null; }
-  const off=cfg.off||1;
-  if(cfg.ultimoDiaMes)return new Date(y,m-1+off+1,0);
-  if(cfg.ultimoUtil)return _ajustaUtil(new Date(y,m-1+off+1,0),true);
-  return _ajustaUtil(new Date(y,m-1+off,cfg.dia),cfg.antecipa===true);
-}
-function _prazoInfo(t,mesKey){
-  const prazo=prazoDaTarefa(t.desc,t.area,mesKey);
-  if(!prazo)return {prazo:null};
-  const hoje=new Date();hoje.setHours(0,0,0,0);const pz=new Date(prazo);pz.setHours(0,0,0,0);
-  const dias=Math.round((pz-hoje)/86400000);
-  return {prazo:pz,dias,venceu:dias<0,hoje:dias===0,breve:dias>0&&dias<=7};
-}
-function _prazoHtml(t,mesKey){
-  if(t.status==='naoseaplica')return '';
-  if(t.status==='concluido'){
-    if(!t.concluidoEm)return '';
-    const c=new Date(t.concluidoEm+'T00:00:00'); const prazo=prazoDaTarefa(t.desc,t.area,mesKey);
-    let tag=''; if(prazo){const pz=new Date(prazo);pz.setHours(0,0,0,0); tag=c<=pz?' · no prazo':' · c/ atraso';}
-    return `<span class="t-prazo" style="color:var(--green);font-size:11px;white-space:nowrap;margin:0 6px;">✓ ${_ddmm(c)}${tag}</span>`;
-  }
-  const info=_prazoInfo(t,mesKey); if(!info.prazo)return '';
-  if(info.venceu)return `<span class="t-prazo" style="color:var(--red);font-weight:600;font-size:11px;white-space:nowrap;margin:0 6px;" title="venceu ${_ddmm(info.prazo)}">⚠ atrasada ${Math.abs(info.dias)}d</span>`;
-  if(info.hoje)return `<span class="t-prazo" style="color:var(--red);font-weight:600;font-size:11px;white-space:nowrap;margin:0 6px;">⚠ vence hoje</span>`;
-  if(info.breve)return `<span class="t-prazo" style="color:#d97706;font-weight:600;font-size:11px;white-space:nowrap;margin:0 6px;" title="${_ddmm(info.prazo)}">vence em ${info.dias}d</span>`;
-  return `<span class="t-prazo" style="color:var(--muted);font-size:11px;white-space:nowrap;margin:0 6px;">vence ${_ddmm(info.prazo)}</span>`;
-}
 function renderTarefas(){
   const col=document.getElementById('col-tarefas');col.innerHTML='';
   const mk=getMembroKey();const md=getMesData(setorAtual,mk,empresaAtual,mesAtual);
@@ -1436,16 +1344,6 @@ function renderTarefas(){
   strip.innerHTML=`<div class="strip-item"><div class="strip-num" style="color:var(--yellow)">${counts.pendente}</div><div class="strip-label">Pendente</div></div><div class="strip-item"><div class="strip-num" style="color:var(--blue)">${counts.andamento}</div><div class="strip-label">Andamento</div></div><div class="strip-item"><div class="strip-num" style="color:var(--teal)">${counts.aguardando}</div><div class="strip-label">Aguard.</div></div><div class="strip-item"><div class="strip-num" style="color:var(--red)">${counts.atrasado}</div><div class="strip-label">Atrasado</div></div><div class="strip-item"><div class="strip-num" style="color:var(--green)">${counts.concluido}</div><div class="strip-label">Concluído</div></div><div class="strip-item"><div class="strip-num" style="color:var(--muted)">${counts.naoseaplica}</div><div class="strip-label">N/A</div></div>`;
   col.appendChild(strip);
 
-  // Resumo de prazos (só aparece quando há tarefas com vencimento — fiscal)
-  let _atr=0,_brv=0,_cnc=0,_temPz=false;
-  tarefas.forEach(t=>{const pi=_prazoInfo(t,mesAtual);if(pi.prazo){_temPz=true;if(t.status==='concluido')_cnc++;else if(t.status!=='naoseaplica'){if(pi.venceu||pi.hoje)_atr++;else if(pi.breve)_brv++;}}});
-  if(_temPz){
-    const ps=document.createElement('div');
-    ps.style='display:flex;gap:16px;flex-wrap:wrap;font-size:12px;margin:6px 0 2px;padding:7px 10px;background:var(--surface3);border-radius:6px;';
-    ps.innerHTML=`<span style="color:var(--red);font-weight:600;">🔴 ${_atr} atrasada${_atr===1?'':'s'}</span><span style="color:#d97706;font-weight:600;">🟡 ${_brv} vence essa semana</span><span style="color:var(--green);font-weight:600;">🟢 ${_cnc} concluída${_cnc===1?'':'s'}</span>`;
-    col.appendChild(ps);
-  }
-
   if(counts.naoseaplica>0){
     const tg=document.createElement('div');tg.style='display:flex;justify-content:flex-end;margin:4px 0 0;';
     tg.innerHTML=`<button class="hist-btn" style="font-size:11px;padding:3px 9px;" onclick="toggleMostrarNA()">${mostrarNA?'🙈 Ocultar não se aplica':'👁️ Mostrar não se aplica ('+counts.naoseaplica+')'}</button>`;
@@ -1464,7 +1362,7 @@ function renderTarefas(){
     vis.forEach(t=>{
       const sCor={pendente:'var(--yellow)',andamento:'var(--blue)',aguardando:'var(--teal)',atrasado:'var(--red)',concluido:'var(--green)',naoseaplica:'var(--muted)'}[t.status]||'var(--muted)';
       const item=document.createElement('div');item.className='t-item';
-      item.innerHTML=`<div class="t-chk ${t.status==='concluido'?'ok':''}" onclick="toggleT(${t.id})"></div><div class="t-nome ${t.status==='concluido'||t.status==='naoseaplica'?'riscado':''}">${t.desc}</div>${_prazoHtml(t,mesAtual)}<div class="t-actions"><select class="t-sel" onchange="mudarStatus(${t.id},this.value)" style="color:${sCor}"><option value="pendente"${t.status==='pendente'?' selected':''}>Pendente</option><option value="andamento"${t.status==='andamento'?' selected':''}>Em andamento</option><option value="aguardando"${t.status==='aguardando'?' selected':''}>Aguardando doc.</option><option value="atrasado"${t.status==='atrasado'?' selected':''}>Atrasado</option><option value="concluido"${t.status==='concluido'?' selected':''}>Concluído</option><option value="naoseaplica"${t.status==='naoseaplica'?' selected':''}>Não se aplica</option></select>${isGestora()?`<button class="t-del" onclick="deletarT(${t.id})" title="Remover">✕</button>`:''}</div>`;
+      item.innerHTML=`<div class="t-chk ${t.status==='concluido'?'ok':''}" onclick="toggleT(${t.id})"></div><div class="t-nome ${t.status==='concluido'||t.status==='naoseaplica'?'riscado':''}">${t.desc}</div><div class="t-actions"><select class="t-sel" onchange="mudarStatus(${t.id},this.value)" style="color:${sCor}"><option value="pendente"${t.status==='pendente'?' selected':''}>Pendente</option><option value="andamento"${t.status==='andamento'?' selected':''}>Em andamento</option><option value="aguardando"${t.status==='aguardando'?' selected':''}>Aguardando doc.</option><option value="atrasado"${t.status==='atrasado'?' selected':''}>Atrasado</option><option value="concluido"${t.status==='concluido'?' selected':''}>Concluído</option><option value="naoseaplica"${t.status==='naoseaplica'?' selected':''}>Não se aplica</option></select>${isGestora()?`<button class="t-del" onclick="deletarT(${t.id})" title="Remover">✕</button>`:''}</div>`;
       wrap.appendChild(item);
     });
   });
@@ -1506,7 +1404,7 @@ function initMonitor(){
   ['fiscal','contabil'].forEach(s=>{
     const mks=s==='fiscal'?MEMBROS_FISCAL.map(m=>m.id):['contabil'];
     mks.forEach(mk=>{
-      const emps=s==='fiscal'?empresasDoMembro(mk,mes):TODAS_EMPRESAS; // carteira do mês (considera transferências)
+      const emps=s==='fiscal'?(MEMBROS_FISCAL.find(x=>x.id===mk)?.empresas||[]):TODAS_EMPRESAS;
       emps.forEach(emp=>{
         const md=getMesData(s,mk,emp,mes); const ts=md.tarefas||[];
         if(ts.length===0)return;
@@ -1646,7 +1544,7 @@ function gerarRelatorio(){
   setores.forEach(s=>{
     const membrosKeys=s==='fiscal'?MEMBROS_FISCAL.map(m=>m.id):['contabil'];
     membrosKeys.forEach(mk=>{
-      const empLista=s==='fiscal'?empresasDoMembro(mk,mes):TODAS_EMPRESAS; // carteira do mês (considera transferências)
+      const empLista=s==='fiscal'?(MEMBROS_FISCAL.find(x=>x.id===mk)?.empresas||[]):TODAS_EMPRESAS;
       empLista.forEach(emp=>{
         if(empresaFiltro&&!emp.toLowerCase().includes(empresaFiltro))return;
         if(regimeFiltro!=='todos' && ((fichas[emp]&&fichas[emp].regime||'').trim()!==regimeFiltro))return;
@@ -2080,7 +1978,6 @@ async function toggleT(id){
   const mk=getMembroKey();const md=getMesData(setorAtual,mk,empresaAtual,mesAtual);
   const t=md.tarefas.find(x=>x.id===id);if(!t)return;
   t.status=t.status==='concluido'?'pendente':'concluido';
-  if(t.status==='concluido'){if(!t.concluidoEm)t.concluidoEm=_hojeYMD();}else{delete t.concluidoEm;}
   setMesData(setorAtual,mk,empresaAtual,mesAtual,md);
   await saveDB();if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();renderTarefas();
   toast(t.status==='concluido'?'✓ Concluída!':'Reaberta');
@@ -2088,7 +1985,6 @@ async function toggleT(id){
 async function mudarStatus(id,val){
   const mk=getMembroKey();const md=getMesData(setorAtual,mk,empresaAtual,mesAtual);
   const t=md.tarefas.find(x=>x.id===id);if(!t)return;t.status=val;
-  if(val==='concluido'){if(!t.concluidoEm)t.concluidoEm=_hojeYMD();}else{delete t.concluidoEm;}
   setMesData(setorAtual,mk,empresaAtual,mesAtual,md);
   await saveDB();if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();renderTarefas();
 }
@@ -2220,7 +2116,6 @@ function renderFicha(col){
     <div class="ficha-section">
       <div class="ficha-section-titulo">Dados Cadastrais</div>
       <div class="ficha-grid">
-        <div class="ficha-campo"><div class="ficha-label">Código Questor</div><input class="ficha-input" id="f-codquestor" value="${ficha.codigoQuestor||''}" placeholder="Ex: 482" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">CNPJ</div><div style="display:flex;gap:5px;align-items:center;"><input class="ficha-input" id="f-cnpj" value="${ficha.cnpj||''}" placeholder="00.000.000/0001-00" ${ro} style="flex:1;"/><button type="button" class="btn-copia-num" onclick="copiarSoNumeros('f-cnpj','CNPJ')" title="Copiar só os números">📋</button></div></div>
         <div class="ficha-campo"><div class="ficha-label">Data de Abertura</div><input class="ficha-input" id="f-abertura" type="date" value="${ficha.abertura||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">CNAE Principal</div><input class="ficha-input" id="f-cnae" value="${ficha.cnae||''}" placeholder="Ex: 6920-6/01" ${ro}/></div>
@@ -2577,7 +2472,6 @@ async function deletarContato(idx){
 async function salvarFicha(){
   if(!isGestora()){toast('Sem permissão','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
-  ficha.codigoQuestor=(document.getElementById('f-codquestor')?.value||'').trim();
   ficha.cnpj=document.getElementById('f-cnpj')?.value||'';
   ficha.abertura=document.getElementById('f-abertura')?.value||'';
   ficha.cnae=document.getElementById('f-cnae')?.value||'';
