@@ -75,3 +75,6 @@ Como isso afeta o dia a dia da equipe e/ou dos clientes.
 - [ADR-0029 — DIRBI só para as empresas obrigadas](ADR-0029-dirbi-so-obrigadas.md)
 - [ADR-0030 — Tributos por CNAE no Lucro Presumido/Real (PIS/COFINS/IRPJ/CSLL/ISS)](ADR-0030-tributos-por-cnae-lp-lr.md)
 - [ADR-0031 — Filiais como empresas separadas](ADR-0031-filiais-como-empresas-separadas.md)
+- [ADR-0032 — Prazos e datas de conclusão nas tarefas (fiscal)](ADR-0032-prazos-nas-tarefas.md)
+- [ADR-0033 — Transferência de empresa com data (responsável fiscal por mês)](ADR-0033-transferencia-empresa-por-mes.md)
+- [ADR-0034 — Número (código) da empresa no Questor ao lado de cada empresa](ADR-0034-codigo-questor-por-empresa.md)
