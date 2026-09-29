@@ -1529,20 +1529,21 @@ function initMonitor(){
         if(!empMap[emp])empMap[emp]={total:0,ok:0,atrasado:0,aguardando:0,resp:rid};
         ts.forEach(t=>{
           total++; porPessoa[rid].total++; empMap[emp].total++;
-          const ok=(t.status==='concluido'||t.status==='naoseaplica');
           if(!porTarefa[t.desc])porTarefa[t.desc]={total:0,atrasado:0,aguardando:0,pendente:0};
           porTarefa[t.desc].total++;
-          if(ok){concl++;porPessoa[rid].ok++;empMap[emp].ok++;}
-          if(t.status==='atrasado'){atras++;porPessoa[rid].atrasado++;empMap[emp].atrasado++;porTarefa[t.desc].atrasado++;}
-          if(t.status==='aguardando'){agu++;porPessoa[rid].aguardando++;empMap[emp].aguardando++;porTarefa[t.desc].aguardando++;}
-          if(t.status==='pendente'){pend++;porTarefa[t.desc].pendente++;}
+          if(t.status==='concluido'||t.status==='naoseaplica'){concl++;porPessoa[rid].ok++;empMap[emp].ok++;return;}
+          // ATRASADA = prazo já venceu por DATA (ou marcada "Atrasado" à mão). Buckets exclusivos.
+          let venceu=false; try{const pi=_prazoInfo(t,mes); venceu=!!(pi.prazo&&(pi.venceu||pi.hoje));}catch(e){}
+          if(venceu||t.status==='atrasado'){atras++;porPessoa[rid].atrasado++;empMap[emp].atrasado++;porTarefa[t.desc].atrasado++;}
+          else if(t.status==='aguardando'){agu++;porPessoa[rid].aguardando++;empMap[emp].aguardando++;porTarefa[t.desc].aguardando++;}
+          else {pend++;porTarefa[t.desc].pendente++;}
         });
       });
     });
   });
   const el=document.getElementById('painel-monitor');
   const cab=`<div class="rel-titulo">📡 Monitoramento · ${mesLabel(mes)}</div>
-    <div class="rel-sub">Visão rápida do que precisa de atenção (atualiza conforme a equipe marca as tarefas)</div>`;
+    <div class="rel-sub">Visão rápida do que precisa de atenção · <b>atrasadas = prazo já vencido</b> (por data)</div>`;
   if(total===0){
     el.innerHTML=cab+`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:30px;text-align:center;color:var(--muted);margin-top:16px;">
       Ainda não há tarefas marcadas neste mês. 🌱<br>O painel ganha vida conforme a equipe for usando o sistema.</div>`;
