@@ -1014,6 +1014,15 @@ function novasTarefasMes(setor,mk,emp,mes){
     return {id:nextId++,desc:tp.desc,area:tp.area,status};
   });
 }
+// Ao marcar "não se aplica", replica para os meses SEGUINTES já existentes (só sobre 'pendente' — não mexe no que já foi feito/mexido).
+function replicarNaFrente(setor,mk,emp,desc,mesBase){
+  const bucket=db[setor]&&db[setor][mk]&&db[setor][mk][emp]; if(!bucket)return;
+  Object.keys(bucket).forEach(m=>{
+    if(m<=mesBase)return;
+    const tl=(bucket[m]&&bucket[m].tarefas)||[];
+    tl.forEach(x=>{ if(x.desc===desc && x.status==='pendente'){ x.status='naoseaplica'; delete x.concluidoEm; } });
+  });
+}
 
 // ESTADO
 let usuarioAtual=null,setorAtual='fiscal',membroAtual=null,empresaAtual=null;
@@ -2104,6 +2113,7 @@ async function mudarStatus(id,val){
   const t=md.tarefas.find(x=>x.id===id);if(!t)return;t.status=val;
   if(val==='concluido'){if(!t.concluidoEm)t.concluidoEm=_hojeYMD();}else{delete t.concluidoEm;}
   setMesData(setorAtual,mk,empresaAtual,mesAtual,md);
+  if(val==='naoseaplica')replicarNaFrente(setorAtual,mk,empresaAtual,t.desc,mesAtual); // "não se aplica" vale pros meses seguintes
   await saveDB();if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();renderTarefas();
 }
 async function deletarT(id){
