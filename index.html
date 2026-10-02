@@ -1014,6 +1014,15 @@ function novasTarefasMes(setor,mk,emp,mes){
     return {id:nextId++,desc:tp.desc,area:tp.area,status};
   });
 }
+// Progresso considerando SÓ o que se aplica: feitas (concluído) ÷ aplicáveis (total − "não se aplica").
+// O "não se aplica" NÃO entra na conta (não faz parte do processo da empresa).
+function _prog(tarefas){
+  let total=0,feitas=0,na=0;
+  (tarefas||[]).forEach(t=>{ total++; if(t.status==='naoseaplica')na++; else if(t.status==='concluido')feitas++; });
+  const aplic=total-na;
+  const pct=aplic>0?Math.round(feitas/aplic*100):(total>0?100:0);
+  return {total,feitas,na,aplic,pct};
+}
 // Ao marcar "não se aplica", replica para os meses SEGUINTES já existentes (só sobre 'pendente' — não mexe no que já foi feito/mexido).
 function replicarNaFrente(setor,mk,emp,desc,mesBase){
   const bucket=db[setor]&&db[setor][mk]&&db[setor][mk][emp]; if(!bucket)return;
@@ -1265,8 +1274,8 @@ function renderEmpresasContabil(){
 }
 function criarEmpItem(emp,setor,mk,cor){
   const {tarefas,responsavel}=getMesData(setor,mk,emp,mesAtual);
-  const total=tarefas.length,ok=tarefas.filter(t=>t.status==='concluido'||t.status==='naoseaplica').length;
-  const pct=total>0?Math.round(ok/total*100):0,temAtrasado=tarefas.some(t=>t.status==='atrasado');
+  const pg=_prog(tarefas); const total=pg.total, pct=pg.pct;
+  const temAtrasado=tarefas.some(t=>t.status==='atrasado');
   const respM=responsavel?TODOS_MEMBROS.find(x=>x.id===responsavel):null;
   const div=document.createElement('div');div.className='emp-item'+(empresaAtual===emp?' active':'');
   div.addEventListener('click',()=>{ if(setor==='fiscal'&&mk){membroAtual=mk;renderMembros();} selecionarEmpresa(emp); });
@@ -1291,7 +1300,7 @@ function criarEmpItem(emp,setor,mk,cor){
   if(_gu)html+=`<div style="font-size:10px;font-weight:600;color:${_gu.cor};margin-top:2px;">👤 Gestora: ${_gu.nome}</div>`;
   if(setor==='contabil'&&respM)html+=`<div class="emp-resp-tag">▶ ${respM.nome}</div>`;
   html+=_pz;
-  if(total>0)html+=`<div class="emp-meta"><span>${ok}/${total} ok</span><span>${pct}%</span></div><div class="emp-prog"><div class="emp-prog-f" style="width:${pct}%;background:${cor}"></div></div>`;
+  if(total>0)html+=`<div class="emp-meta"><span>${pg.feitas}/${pg.aplic} feitas</span><span>${pct}%</span></div><div class="emp-prog"><div class="emp-prog-f" style="width:${pct}%;background:${cor}"></div></div>`;
   div.innerHTML=html;return div;
 }
 // Busca GERAL no fiscal: procura em todas as carteiras, sem precisar escolher a pessoa.
@@ -1407,8 +1416,7 @@ function renderTarefas(){
   const col=document.getElementById('col-tarefas');col.innerHTML='';
   const mk=getMembroKey();const md=getMesData(setorAtual,mk,empresaAtual,mesAtual);
   const {tarefas,responsavel}=md;
-  const ok=tarefas.filter(t=>t.status==='concluido'||t.status==='naoseaplica').length;
-  const total=tarefas.length,pct=total>0?Math.round(ok/total*100):0;
+  const pg=_prog(tarefas); const total=pg.total, pct=pg.pct;
   let cor='#2563eb';
   if(setorAtual==='fiscal'&&membroAtual)cor=MEMBROS_FISCAL.find(x=>x.id===membroAtual)?.cor||cor;
   else if(setorAtual==='contabil'&&responsavel)cor=MEMBROS_CONTABIL.find(x=>x.id===responsavel)?.cor||cor;
@@ -1449,7 +1457,7 @@ function renderTarefas(){
   }
 
   const pb=document.createElement('div');pb.className='prog-wrap';
-  pb.innerHTML=`<div class="pw-info"><span>${mesLabel(mesAtual)}</span><strong>${ok}/${total} · ${pct}%</strong></div><div class="pw-bar"><div class="pw-fill" style="width:${pct}%;background:${cor}"></div></div>`;
+  pb.innerHTML=`<div class="pw-info"><span>${mesLabel(mesAtual)}</span><strong>${pg.feitas}/${pg.aplic} feitas · ${pct}%</strong></div><div class="pw-bar"><div class="pw-fill" style="width:${pct}%;background:${cor}"></div></div>`;
   col.appendChild(pb);
 
   const counts={pendente:0,andamento:0,aguardando:0,atrasado:0,concluido:0,naoseaplica:0};
@@ -1479,9 +1487,9 @@ function renderTarefas(){
   Object.entries(grupos).forEach(([area,itens])=>{
     const vis=mostrarNA?itens:itens.filter(t=>t.status!=='naoseaplica');
     if(vis.length===0)return; // esconde a área inteira se só tem "não se aplica"
-    const okA=vis.filter(t=>t.status==='concluido'||t.status==='naoseaplica').length;
+    const feitasA=itens.filter(t=>t.status==='concluido').length, aplicA=itens.filter(t=>t.status!=='naoseaplica').length;
     const sh=document.createElement('div');sh.className='secao-header';
-    sh.innerHTML=`<div class="secao-tit">${area}</div><div class="secao-cnt">${okA}/${vis.length}</div>`;
+    sh.innerHTML=`<div class="secao-tit">${area}</div><div class="secao-cnt">${feitasA}/${aplicA}</div>`;
     wrap.appendChild(sh);
     vis.forEach(t=>{
       const sCor={pendente:'var(--yellow)',andamento:'var(--blue)',aguardando:'var(--teal)',atrasado:'var(--red)',concluido:'var(--green)',naoseaplica:'var(--muted)'}[t.status]||'var(--muted)';
@@ -1506,11 +1514,11 @@ function renderHistorico(col,cor){
   if(meses.length===0){wrap.innerHTML='<div class="vazio" style="padding:28px;">Nenhum histórico ainda.</div>';}
   else meses.forEach(m=>{
     const {tarefas,responsavel}=getMesData(setorAtual,mk,empresaAtual,m);
-    const ok=tarefas.filter(t=>t.status==='concluido'||t.status==='naoseaplica').length;
+    const ok=tarefas.filter(t=>t.status==='concluido').length; // feitas (o "não se aplica" não conta)
     const atrasado=tarefas.filter(t=>t.status==='atrasado').length;
     const respNome=responsavel?TODOS_MEMBROS.find(x=>x.id===responsavel)?.nome:'';
     const bloco=document.createElement('div');bloco.className='hist-mes';
-    bloco.innerHTML=`<div class="hist-h" onclick="this.nextElementSibling.classList.toggle('open')"><div><div class="hist-mes-nome">${mesLabel(m)}</div>${respNome?`<div class="hist-resp-nome">▶ ${respNome}</div>`:''}</div><div class="hist-stats"><div class="hist-stat"><b style="color:var(--green)">${ok}</b> ok</div><div class="hist-stat"><b style="color:var(--red)">${atrasado}</b> atras.</div><div class="hist-stat"><b>${tarefas.length}</b> total</div></div></div><div class="hist-body">${tarefas.map(t=>`<div class="hist-t"><div class="hist-chk ${t.status==='concluido'?'ok':''}"></div><div style="flex:1;${t.status==='concluido'||t.status==='naoseaplica'?'text-decoration:line-through;color:var(--muted);':''}">${t.desc}</div><span class="sbadge ${t.status}">${lblStatus(t.status)}</span></div>`).join('')}</div>`;
+    bloco.innerHTML=`<div class="hist-h" onclick="this.nextElementSibling.classList.toggle('open')"><div><div class="hist-mes-nome">${mesLabel(m)}</div>${respNome?`<div class="hist-resp-nome">▶ ${respNome}</div>`:''}</div><div class="hist-stats"><div class="hist-stat"><b style="color:var(--green)">${ok}</b> feitas</div><div class="hist-stat"><b style="color:var(--red)">${atrasado}</b> atras.</div><div class="hist-stat"><b>${tarefas.length}</b> total</div></div></div><div class="hist-body">${tarefas.map(t=>`<div class="hist-t"><div class="hist-chk ${t.status==='concluido'?'ok':''}"></div><div style="flex:1;${t.status==='concluido'||t.status==='naoseaplica'?'text-decoration:line-through;color:var(--muted);':''}">${t.desc}</div><span class="sbadge ${t.status}">${lblStatus(t.status)}</span></div>`).join('')}</div>`;
     wrap.appendChild(bloco);
   });
   col.appendChild(wrap);
@@ -1523,7 +1531,7 @@ function _nomePessoa(rid){ return (USUARIOS[rid]&&USUARIOS[rid].nome) || ((TODOS
 function _corPessoa(rid){ return (USUARIOS[rid]&&USUARIOS[rid].cor) || '#6b7280'; }
 function initMonitor(){
   const mes=mesAtual;
-  let total=0,concl=0,atras=0,agu=0,pend=0;
+  let total=0,concl=0,atras=0,agu=0,pend=0,naG=0; // concl = concluído (o "não se aplica" vai em naG e NÃO entra na conta do %)
   const porPessoa={}, empMap={}, porTarefa={};
   ['fiscal','contabil'].forEach(s=>{
     const mks=s==='fiscal'?MEMBROS_FISCAL.map(m=>m.id):['contabil'];
@@ -1532,15 +1540,18 @@ function initMonitor(){
       emps.forEach(emp=>{
         const md=getMesData(s,mk,emp,mes); const ts=md.tarefas||[];
         if(ts.length===0)return;
+        if(s==='contabil' && !md.responsavel) return; // contábil sem responsável (ninguém pegou) não entra no painel
         const rid=s==='fiscal'?mk:(md.responsavel||'contabil');
-        if(!porPessoa[rid])porPessoa[rid]={total:0,ok:0,atrasado:0,aguardando:0,empresas:0};
+        if(!porPessoa[rid])porPessoa[rid]={total:0,ok:0,na:0,atrasado:0,aguardando:0,empresas:0};
         porPessoa[rid].empresas++;
-        if(!empMap[emp])empMap[emp]={total:0,ok:0,atrasado:0,aguardando:0,resp:rid};
+        if(!empMap[emp])empMap[emp]={total:0,ok:0,na:0,atrasado:0,aguardando:0,resp:rid};
         ts.forEach(t=>{
+          if(s==='contabil' && !(t.status==='concluido'||t.status==='naoseaplica')) return; // contábil: conta só o já feito
           total++; porPessoa[rid].total++; empMap[emp].total++;
           if(!porTarefa[t.desc])porTarefa[t.desc]={total:0,atrasado:0,aguardando:0,pendente:0};
           porTarefa[t.desc].total++;
-          if(t.status==='concluido'||t.status==='naoseaplica'){concl++;porPessoa[rid].ok++;empMap[emp].ok++;return;}
+          if(t.status==='naoseaplica'){naG++;porPessoa[rid].na++;empMap[emp].na++;return;} // não se aplica: fora da conta
+          if(t.status==='concluido'){concl++;porPessoa[rid].ok++;empMap[emp].ok++;return;}
           // ATRASADA = prazo já venceu por DATA (ou marcada "Atrasado" à mão). Buckets exclusivos.
           let venceu=false; try{const pi=_prazoInfo(t,mes); venceu=!!(pi.prazo&&(pi.venceu||pi.hoje));}catch(e){}
           if(venceu||t.status==='atrasado'){atras++;porPessoa[rid].atrasado++;empMap[emp].atrasado++;porTarefa[t.desc].atrasado++;}
@@ -1558,14 +1569,14 @@ function initMonitor(){
       Ainda não há tarefas marcadas neste mês. 🌱<br>O painel ganha vida conforme a equipe for usando o sistema.</div>`;
     return;
   }
-  const pct=total>0?Math.round(concl/total*100):0;
+  const aplicG=total-naG; const pct=aplicG>0?Math.round(concl/aplicG*100):(total>0?100:0); // % só sobre o que se aplica
   const card=(cor,val,lbl)=>`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;flex:1;min-width:120px;">
     <div style="font-size:26px;font-weight:700;color:${cor}">${val}</div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">${lbl}</div></div>`;
   const sec=(t,c)=>`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:14px;"><div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px;">${t}</div>${c}</div>`;
   const tagAtr=v=>`${v.atrasado?`<span style="color:var(--red)">🔴 ${v.atrasado}</span> `:''}${v.aguardando?`<span style="color:var(--yellow)">🟡 ${v.aguardando}</span>`:''}`;
 
   const pessoas=Object.entries(porPessoa).sort((a,b)=>(b[1].atrasado+b[1].aguardando)-(a[1].atrasado+a[1].aguardando));
-  const pessoasHtml=pessoas.map(([rid,v])=>{const p=v.total>0?Math.round(v.ok/v.total*100):0;return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+  const pessoasHtml=pessoas.map(([rid,v])=>{const _ap=v.total-v.na;const p=_ap>0?Math.round(v.ok/_ap*100):(v.total>0?100:0);return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
       <div style="width:26px;height:26px;border-radius:50%;background:${_corPessoa(rid)};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${_nomePessoa(rid)[0]}</div>
       <div style="flex:1;min-width:110px;"><div style="font-size:13px;font-weight:600;">${_nomePessoa(rid)}</div><div style="font-size:10px;color:var(--muted);">${v.empresas} empresa(s)</div></div>
       <div style="flex:2;min-width:100px;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="height:100%;width:${p}%;background:var(--green);"></div></div></div>
@@ -1699,7 +1710,7 @@ function gerarRelatorio(){
   const atrasadas=todasTarefas.filter(t=>t.status==='atrasado').length;
   const aguardando=todasTarefas.filter(t=>t.status==='aguardando').length;
   const na=todasTarefas.filter(t=>t.status==='naoseaplica').length;
-  const pct=total>0?Math.round(concluidas/total*100):0;
+  const aplic=total-na; const pct=aplic>0?Math.round(concluidas/aplic*100):(total>0?100:0); // % só sobre o que se aplica
 
   // Por pessoa
   const porPessoa={};
@@ -1708,26 +1719,27 @@ function gerarRelatorio(){
     if(!porPessoa[rid])porPessoa[rid]={total:0,concluido:0,atrasado:0,aguardando:0,pendente:0,andamento:0};
     porPessoa[rid].total++;
     porPessoa[rid][t.status]=(porPessoa[rid][t.status]||0)+1;
-    if(t.status==='naoseaplica')porPessoa[rid].concluido++;
   });
 
-  // Empresas
+  // Empresas (ok = concluído; o "não se aplica" não entra na conta)
   const empMap={};
   todasTarefas.forEach(t=>{
-    if(!empMap[t.empresa])empMap[t.empresa]={total:0,ok:0,atrasado:0,pendente:0};
+    if(!empMap[t.empresa])empMap[t.empresa]={total:0,ok:0,na:0,atrasado:0,pendente:0};
     empMap[t.empresa].total++;
-    if(t.status==='concluido'||t.status==='naoseaplica')empMap[t.empresa].ok++;
+    if(t.status==='concluido')empMap[t.empresa].ok++;
+    if(t.status==='naoseaplica')empMap[t.empresa].na++;
     if(t.status==='atrasado')empMap[t.empresa].atrasado++;
     if(t.status==='pendente')empMap[t.empresa].pendente++;
   });
-  const empsList=Object.entries(empMap).sort((a,b)=>{const pa=a[1].total?a[1].ok/a[1].total:0,pb=b[1].total?b[1].ok/b[1].total:0;return (b[1].atrasado-a[1].atrasado)||(pa-pb)||a[0].localeCompare(b[0],'pt');});
+  const empsList=Object.entries(empMap).sort((a,b)=>{const pa=(a[1].total-a[1].na)?a[1].ok/(a[1].total-a[1].na):0,pb=(b[1].total-b[1].na)?b[1].ok/(b[1].total-b[1].na):0;return (b[1].atrasado-a[1].atrasado)||(pa-pb)||a[0].localeCompare(b[0],'pt');});
 
   // Por tarefa (desc)
   const porTarefa={};
   todasTarefas.forEach(t=>{
-    if(!porTarefa[t.desc])porTarefa[t.desc]={total:0,concluido:0,atrasado:0,pendente:0};
+    if(!porTarefa[t.desc])porTarefa[t.desc]={total:0,concluido:0,na:0,atrasado:0,pendente:0};
     porTarefa[t.desc].total++;
-    if(t.status==='concluido'||t.status==='naoseaplica')porTarefa[t.desc].concluido++;
+    if(t.status==='concluido')porTarefa[t.desc].concluido++;
+    if(t.status==='naoseaplica')porTarefa[t.desc].na++;
     if(t.status==='atrasado')porTarefa[t.desc].atrasado++;
     if(t.status==='pendente')porTarefa[t.desc].pendente++;
   });
@@ -1735,7 +1747,7 @@ function gerarRelatorio(){
   let html=`
   <div class="kpi-grid">
     <div class="kpi-card k1"><div class="kpi-label">Total</div><div class="kpi-num">${total}</div><div class="kpi-sub">${mesLabel(mes)}</div></div>
-    <div class="kpi-card k2"><div class="kpi-label">Concluídas</div><div class="kpi-num">${concluidas}</div><div class="kpi-sub">${pct}% do total</div></div>
+    <div class="kpi-card k2"><div class="kpi-label">Concluídas</div><div class="kpi-num">${concluidas}</div><div class="kpi-sub">${pct}% do que se aplica</div></div>
     <div class="kpi-card k3"><div class="kpi-label">Pendentes</div><div class="kpi-num">${pendentes}</div><div class="kpi-sub">aguardando</div></div>
     <div class="kpi-card k4"><div class="kpi-label">Atrasadas</div><div class="kpi-num">${atrasadas}</div><div class="kpi-sub">atenção</div></div>
     <div class="kpi-card k5"><div class="kpi-label">Aguard. Doc.</div><div class="kpi-num">${aguardando}</div><div class="kpi-sub">pendente cliente</div></div>
@@ -1753,7 +1765,7 @@ function gerarRelatorio(){
     const nome=m?m.nome:'Sem responsável';
     const cor=m?m.cor:'#9ca3af';
     const setor2=MEMBROS_FISCAL.find(x=>x.id===rid)?'Fiscal':'Contábil';
-    const p=v.total>0?Math.round(v.concluido/v.total*100):0;
+    const _naP=v.naoseaplica||0; const p=(v.total-_naP)>0?Math.round(v.concluido/(v.total-_naP)*100):(v.total>0?100:0);
     html+=`<tr><td><span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:${cor};flex-shrink:0;display:inline-block;"></span>${nome}</span></td><td style="color:var(--muted)">${rid==='_sem'?'—':setor2}</td><td style="color:var(--green);font-weight:600">${v.concluido}</td><td style="color:var(--yellow)">${v.pendente||0}</td><td style="color:var(--red);font-weight:${v.atrasado>0?'700':'400'}">${v.atrasado||0}</td><td style="color:var(--teal)">${v.aguardando||0}</td><td><div style="display:flex;align-items:center;gap:6px;"><div class="prog-mini"><div class="prog-mini-f" style="width:${p}%;background:${cor}"></div></div><span style="font-size:10px;color:var(--muted)">${p}%</span></div></td></tr>`;
   });
   html+=`</tbody></table></div>`;
@@ -1761,7 +1773,7 @@ function gerarRelatorio(){
   // Por tarefa
   html+=`<div class="rel-section"><div class="rel-section-title">Por Tarefa <span class="badge">${Object.keys(porTarefa).length} tipos</span></div><table class="rel-table"><thead><tr><th>Tarefa</th><th>Total</th><th>Concluídas</th><th>Pendentes</th><th>Atrasadas</th><th>%</th></tr></thead><tbody>`;
   Object.entries(porTarefa).sort((a,b)=>b[1].atrasado-a[1].atrasado).forEach(([desc,v])=>{
-    const p=v.total>0?Math.round(v.concluido/v.total*100):0;
+    const p=(v.total-v.na)>0?Math.round(v.concluido/(v.total-v.na)*100):(v.total>0?100:0);
     html+=`<tr><td>${desc}</td><td style="color:var(--muted)">${v.total}</td><td style="color:var(--green)">${v.concluido}</td><td style="color:var(--yellow)">${v.pendente}</td><td style="color:var(--red);font-weight:${v.atrasado>0?'700':'400'}">${v.atrasado}</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="prog-mini"><div class="prog-mini-f" style="width:${p}%;background:var(--accent)"></div></div><span style="font-size:10px;color:var(--muted)">${p}%</span></div></td></tr>`;
   });
   html+=`</tbody></table></div>`;
@@ -1770,7 +1782,7 @@ function gerarRelatorio(){
     const lblSt={pendente:'Pendentes',andamento:'Em andamento',aguardando:'Aguardando doc.',atrasado:'Atrasadas',concluido:'Concluídas',naoseaplica:'N/A'}[statusFiltro]||'';
     html+=`<div class="rel-section"><div class="rel-section-title">Empresas${lblSt?' — '+lblSt:''} <span class="badge">${empsList.length}</span></div><table class="rel-table"><thead><tr><th>Empresa</th><th>Total</th><th>Concluídas</th><th>Atrasadas</th><th>Pendentes</th><th>%</th></tr></thead><tbody>`;
     empsList.forEach(([emp,v])=>{
-      const p=v.total>0?Math.round(v.ok/v.total*100):0;
+      const p=(v.total-v.na)>0?Math.round(v.ok/(v.total-v.na)*100):(v.total>0?100:0);
       html+=`<tr><td>${emp}</td><td style="color:var(--muted)">${v.total}</td><td style="color:var(--green)">${v.ok}</td><td style="color:var(--red);font-weight:${v.atrasado>0?'700':'400'}">${v.atrasado}</td><td style="color:var(--yellow)">${v.pendente}</td><td><div style="display:flex;align-items:center;gap:5px;"><div class="prog-mini"><div class="prog-mini-f" style="width:${p}%;background:var(--accent)"></div></div><span style="font-size:10px;color:var(--muted)">${p}%</span></div></td></tr>`;
     });
     html+=`</tbody></table></div>`;
@@ -1791,7 +1803,7 @@ function exportarRelatorioCSV(){
   if(!d||!d.empresas||!d.empresas.length){toast('Gere o relatório primeiro','#d97706');return;}
   const linhas=[['Empresa','Total','Concluidas','Atrasadas','Pendentes','%']];
   d.empresas.forEach(([emp,v])=>{
-    const p=v.total>0?Math.round(v.ok/v.total*100):0;
+    const p=(v.total-(v.na||0))>0?Math.round(v.ok/(v.total-(v.na||0))*100):(v.total>0?100:0);
     linhas.push([emp,v.total,v.ok,v.atrasado||0,v.pendente||0,p+'%']);
   });
   const csv='﻿'+linhas.map(l=>l.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(';')).join('\r\n');
