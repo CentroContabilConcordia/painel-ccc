@@ -1529,6 +1529,11 @@ function renderHistorico(col,cor){
 // ══════════════════════════════
 function _nomePessoa(rid){ return (USUARIOS[rid]&&USUARIOS[rid].nome) || ((TODOS_MEMBROS.find(m=>m.id===rid)||{}).nome) || rid; }
 function _corPessoa(rid){ return (USUARIOS[rid]&&USUARIOS[rid].cor) || '#6b7280'; }
+// Navega os meses no Monitoramento (comparar mês a mês)
+function navMesMonitor(dir){
+  const[y,mo]=mesAtual.split('-').map(Number);const d=new Date(y,mo-1+dir,1);mesAtual=mesKeyFn(d);
+  initMonitor();
+}
 function initMonitor(){
   const mes=mesAtual;
   let total=0,concl=0,atras=0,agu=0,pend=0,naG=0; // concl = concluído (o "não se aplica" vai em naG e NÃO entra na conta do %)
@@ -1562,8 +1567,13 @@ function initMonitor(){
     });
   });
   const el=document.getElementById('painel-monitor');
-  const cab=`<div class="rel-titulo">📡 Monitoramento · ${mesLabel(mes)}</div>
-    <div class="rel-sub">Visão rápida do que precisa de atenção · <b>atrasadas = prazo já vencido</b> (por data)</div>`;
+  const cab=`<div class="rel-titulo" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">📡 Monitoramento
+      <span class="mes-nav" style="display:inline-flex;align-items:center;gap:4px;">
+        <button class="mes-btn" onclick="navMesMonitor(-1)" title="Mês anterior">‹</button>
+        <span class="mes-atual">${mesLabel(mes)}</span>
+        <button class="mes-btn" onclick="navMesMonitor(1)" title="Próximo mês">›</button>
+      </span></div>
+    <div class="rel-sub">Visão rápida do que precisa de atenção · <b>atrasadas = prazo já vencido</b> (por data) · use ‹ › para comparar os meses</div>`;
   if(total===0){
     el.innerHTML=cab+`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:30px;text-align:center;color:var(--muted);margin-top:16px;">
       Ainda não há tarefas marcadas neste mês. 🌱<br>O painel ganha vida conforme a equipe for usando o sistema.</div>`;
