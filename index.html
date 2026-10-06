@@ -2212,7 +2212,7 @@ function renderContatosHTML(contatos, podeEditar, ro) {
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
 }
 // ── Histórico de tributação (mudança de regime durante o ano) ──
 // Cada segmento: {regime, desde:'AAAA-MM' (''=desde sempre), anexos:[]}
@@ -2259,6 +2259,8 @@ function renderFicha(col){
   const ativa=empAtiva(empresaAtual);
   const ANEXOS=ANEXOS_SN;
   const anexosSel=(ficha.anexos&&ficha.anexos.length)?ficha.anexos:(ficha.anexo?ficha.anexo.split(/\s*,\s*/).filter(Boolean):[]);
+  // Importação: seleção múltipla (migra do campo único antigo ficha.importacao)
+  const impSel=(ficha.importacoes&&ficha.importacoes.length)?ficha.importacoes:(ficha.importacao?ficha.importacao.split(/\s*,\s*/).filter(Boolean):[]);
 
   // Dados fixos
   wrap.innerHTML=`
@@ -2330,11 +2332,11 @@ function renderFicha(col){
       </div>
       ${regimeHistHTML(ficha, podeEditar)}
       <div class="ficha-grid" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
-        <div class="ficha-campo"><div class="ficha-label">Importação dos arquivos (fiscal)</div>
-          <select class="ficha-select" id="f-importacao" ${dis}>
-            <option value="">— Selecione —</option>
-            ${['Sped','Sintegra','XML','Automação Zen','Outro'].map(o=>`<option${ficha.importacao===o?' selected':''}>${o}</option>`).join('')}
-          </select>
+        <div class="ficha-campo" style="grid-column:1/-1;">
+          <div style="display:inline-block;font-size:13px;font-weight:700;color:#4338ca;background:#fff3a3;padding:3px 12px;border-radius:5px;margin-bottom:9px;letter-spacing:.3px;">📥 IMPORTAÇÃO DOS ARQUIVOS (FISCAL)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:14px;">
+            ${['Sped','Sintegra','XML','Automação Zen','Outro'].map(o=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:${dis?'default':'pointer'};"><input type="checkbox" class="imp-chk" value="${o}" ${impSel.includes(o)?'checked':''} ${dis}/> ${o}</label>`).join('')}
+          </div>
         </div>
         <div class="ficha-campo" style="grid-column:1/-1;"><div class="ficha-label">Observação (importação)</div><textarea class="ficha-input" id="f-importacaoObs" rows="3" style="width:100%;resize:vertical;line-height:1.4;" placeholder="detalhes da importação" ${ro}>${_escP(ficha.importacaoObs||'')}</textarea></div>
       </div>
@@ -2640,7 +2642,8 @@ async function salvarFicha(){
   ficha.respFiscal=document.getElementById('f-respFiscal')?.value||'';
   ficha.respContabil=document.getElementById('f-respContabil')?.value||'';
   ficha.gestora=document.getElementById('f-gestora')?.value||'';
-  ficha.importacao=document.getElementById('f-importacao')?.value||'';
+  ficha.importacoes=[...document.querySelectorAll('.imp-chk:checked')].map(c=>c.value);
+  ficha.importacao=ficha.importacoes.join(', '); // compat: mantém o campo texto
   ficha.importacaoObs=document.getElementById('f-importacaoObs')?.value||'';
   ficha.regime=document.getElementById('f-regime')?.value||'Simples Nacional';
   // Os anexos agora vêm da lista de CNAEs (derivados p/ compat com relatórios)
