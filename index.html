@@ -771,7 +771,7 @@ const PAD_CONTABIL=[
   {desc:'Depreciação e amortização',area:'Contábil'},
   {desc:'Provisões contábeis',area:'Contábil'},
   {desc:'Balancete mensal',area:'Contábil'},
-  {desc:'DRE mensal',area:'Contábil'},
+  {desc:'DRE',area:'Contábil'},
   {desc:'Lançamento pró-labore',area:'Contábil'},
   {desc:'Lançamento distribuição de lucros',area:'Contábil'},
   {desc:'Fechamento contábil mensal',area:'Contábil'},
@@ -858,9 +858,28 @@ async function loadDB(){
   try{const r=await window.storage.get(SK,true);if(r&&r.value){const d=JSON.parse(r.value);db=d.db||{};nextId=d.n||1;}}
   catch(e){try{const l=localStorage.getItem(SK);if(l){const d=JSON.parse(l);db=d.db||{};nextId=d.n||1;}}catch(e2){}}
 }
+// Aviso visível de "não salvo" (fixo no rodapé). Aparece se o salvar falhar; some quando salva.
+let _saveRetry=null, _saveFails=0;
+function _avisoSalvar(mostrar){
+  let el=document.getElementById('aviso-salvar');
+  if(mostrar){
+    if(!el){ el=document.createElement('div'); el.id='aviso-salvar';
+      el.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#b91c1c;color:#fff;padding:10px 18px;border-radius:9px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.28);max-width:92vw;text-align:center;';
+      document.body.appendChild(el); }
+    el.innerHTML='⚠️ Suas marcações ainda <u>não foram salvas</u> — tentando salvar… <b>mantenha a página aberta.</b>';
+  } else if(el){ el.remove(); }
+}
 async function saveDB(){
   const p=JSON.stringify({db,n:nextId});
-  try{await window.storage.set(SK,p,true);}catch(e){try{localStorage.setItem(SK,p);}catch(e2){}}
+  try{
+    await window.storage.set(SK,p,true);
+    _saveFails=0; if(_saveRetry){clearTimeout(_saveRetry);_saveRetry=null;} _avisoSalvar(false);
+  }catch(e){
+    try{localStorage.setItem(SK,p);}catch(e2){}      // backup local
+    _saveFails++; _avisoSalvar(true);                // avisa a pessoa
+    if(_saveRetry)clearTimeout(_saveRetry);
+    _saveRetry=setTimeout(()=>saveDB(), Math.min(3000*_saveFails,20000)); // tenta de novo sozinho
+  }
 }
 async function loadProcessos(){
   try{const r=await window.storage.get(SK_PROCESSOS);if(r&&r.value){processos=JSON.parse(r.value)||[];}}
@@ -1002,12 +1021,25 @@ function statusNaAnterior(setor,mk,emp,mes){
   }
   return set;
 }
+// Quando certas tarefas contábeis aparecem conforme regime e mês (DRE/ECD/ECF).
+// DRE: Lucro Real Trimestral -> fechamentos de trimestre (mar/jun/set/dez); demais -> só dezembro.
+// SPED Contábil (ECD) e ECF: só dezembro, em todas.
+function _contabTarefaNoMes(desc, mesNum, ficha){
+  const lrTrim=((ficha||{}).regime==='Lucro Real' && (ficha||{}).periodo==='Trimestral');
+  if(desc==='DRE') return lrTrim ? (mesNum===3||mesNum===6||mesNum===9||mesNum===12) : (mesNum===12);
+  if(desc==='SPED Contábil (ECD)' || desc==='ECF') return mesNum===12;
+  return true; // demais tarefas contábeis: todo mês
+}
 // Monta as tarefas de um mes novo: 'pendente', mas ja marca 'nao se aplica' as herdadas do mes anterior.
 function novasTarefasMes(setor,mk,emp,mes){
-  const pad=setor==='fiscal'?PAD_FISCAL:PAD_CONTABIL;
+  let pad=setor==='fiscal'?PAD_FISCAL:PAD_CONTABIL;
   // No mês de virada de regime, NÃO herda o "não se aplica" do regime antigo — começa limpo.
   const na=ehMesDeVirada(emp,mes)?new Set():statusNaAnterior(setor,mk,emp,mes);
   const dirbiObrig=(fichas[emp]||{}).dirbi===true; // só as empresas obrigadas fazem DIRBI
+  if(setor==='contabil'){ // DRE/ECD/ECF só nos meses certos, conforme o regime
+    const mesNum=parseInt((mes||'').split('-')[1],10)||0;
+    pad=pad.filter(tp=>_contabTarefaNoMes(tp.desc,mesNum,fichas[emp]||{}));
+  }
   return pad.map(tp=>{
     let status=na.has(tp.desc)?'naoseaplica':'pendente';
     if(tp.desc==='DIRBI' && !dirbiObrig) status='naoseaplica'; // demais empresas: DIRBI não se aplica
