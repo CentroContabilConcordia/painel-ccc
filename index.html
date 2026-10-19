@@ -863,7 +863,7 @@ async function loadDB(){
   catch(e){try{const l=localStorage.getItem(SK);if(l){const d=JSON.parse(l);db=d.db||{};nextId=d.n||1;}}catch(e2){}}
 }
 // Aviso visível de "não salvo" (fixo no rodapé). Aparece se o salvar falhar; some quando salva.
-let _saveRetry=null, _saveFails=0;
+let _saveRetry=null, _saveFails=0, _dirty=new Set(), _saving=false, _saveAgain=false, _saveTimer=null;
 function _avisoSalvar(mostrar){
   let el=document.getElementById('aviso-salvar');
   if(mostrar){
@@ -873,18 +873,46 @@ function _avisoSalvar(mostrar){
     el.innerHTML='⚠️ Suas marcações ainda <u>não foram salvas</u> — tentando salvar… <b>mantenha a página aberta.</b>';
   } else if(el){ el.remove(); }
 }
-async function saveDB(){
-  const p=JSON.stringify({db,n:nextId});
+// SALVAR COM MERGE: grava só as empresas-mês que ESTE usuário mexeu, por cima do blob mais novo
+// do servidor, e traz pro local o trabalho dos outros — NUNCA sobrescreve o que outra pessoa
+// salvou (antes, uma sessão desatualizada gravava o blob inteiro por cima e apagava tudo).
+function saveDB(){ // agenda (debounce) e retorna rápido — não trava a UI
+  if(_saveTimer)clearTimeout(_saveTimer);
+  _saveTimer=setTimeout(()=>{_saveTimer=null;_doSave();},800);
+  return Promise.resolve();
+}
+async function _doSave(){
+  if(_saving){ _saveAgain=true; return; }
+  _saving=true; let savingKeys=null;
   try{
-    await window.storage.set(SK,p,true);
+    // 1) pega o blob mais novo do servidor
+    let serverDb=null, serverN=nextId;
+    try{ const r=await window.storage.get(SK,true); if(r&&r.value){ const d=JSON.parse(r.value); serverDb=d.db||{}; serverN=Math.max(nextId,d.n||1);} }catch(e){ serverDb=null; }
+    // 2) traz pro local o trabalho dos OUTROS (empresas-mês que EU não estou editando agora)
+    if(serverDb){
+      for(const s in serverDb)for(const mk in serverDb[s])for(const emp in serverDb[s][mk])for(const mes in serverDb[s][mk][emp]){
+        if(_dirty.has(s+'|'+mk+'|'+emp+'|'+mes))continue; // não toco no que eu mexi
+        if(!db[s])db[s]={}; if(!db[s][mk])db[s][mk]={}; if(!db[s][mk][emp])db[s][mk][emp]={};
+        db[s][mk][emp][mes]=serverDb[s][mk][emp][mes];
+      }
+      nextId=Math.max(nextId,serverN);
+    }
+    // 3) grava o local (minhas mudanças + trabalho atualizado dos outros)
+    savingKeys=new Set(_dirty); _dirty.clear();
+    await window.storage.set(SK, JSON.stringify({db,n:nextId}), true);
     _saveFails=0; if(_saveRetry){clearTimeout(_saveRetry);_saveRetry=null;} _avisoSalvar(false);
   }catch(e){
-    try{localStorage.setItem(SK,p);}catch(e2){}      // backup local
-    _saveFails++; _avisoSalvar(true);                // avisa a pessoa
-    if(_saveRetry)clearTimeout(_saveRetry);
-    _saveRetry=setTimeout(()=>saveDB(), Math.min(3000*_saveFails,20000)); // tenta de novo sozinho
+    if(savingKeys)savingKeys.forEach(k=>_dirty.add(k)); // devolve p/ não perder
+    try{localStorage.setItem(SK,JSON.stringify({db,n:nextId}));}catch(e2){}
+    _saveFails++; _avisoSalvar(true);
+    if(_saveRetry)clearTimeout(_saveRetry); _saveRetry=setTimeout(_doSave,Math.min(3000*_saveFails,20000));
+  }finally{
+    _saving=false;
+    if(_saveAgain){ _saveAgain=false; _doSave(); }
   }
 }
+// Salva já (sem esperar o debounce) ao esconder/sair da aba, pra não deixar nada pendente.
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && (_saveTimer||_dirty.size)){ if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;} _doSave(); } });
 async function loadProcessos(){
   try{const r=await window.storage.get(SK_PROCESSOS);if(r&&r.value){processos=JSON.parse(r.value)||[];}}
   catch(e){console.warn('[CCC] loadProcessos falhou',e);}
@@ -1013,6 +1041,7 @@ function setMesData(setor,mk,empresa,mes,data){
   if(!db[setor])db[setor]={};if(!db[setor][mk])db[setor][mk]={};
   if(!db[setor][mk][empresa])db[setor][mk][empresa]={};
   db[setor][mk][empresa][mes]=data;
+  _dirty.add(setor+'|'+mk+'|'+empresa+'|'+mes); // marca o que ESTE usuário alterou (p/ salvar por merge)
 }
 function getMeses(setor,mk,empresa){return Object.keys(db[setor]?.[mk]?.[empresa]||{}).sort().reverse();}
 // Herda o "nao se aplica" do mes anterior mais recente que tenha tarefas (caracteristica fixa da empresa).
