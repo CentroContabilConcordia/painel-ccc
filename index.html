@@ -1257,8 +1257,7 @@ async function iniciarApp(){
   await loadColaboradores();
   await loadProcessos();
   await loadContabAnual();
-  // Backup automático (meio-dia / fim do dia) — roda ao abrir e a cada 30 min enquanto aberto.
-  _autoBackup(); if(!window._bakInterval)window._bakInterval=setInterval(_autoBackup, 30*60*1000);
+  // (backup automático desativado temporariamente — estava sobrecarregando; redesenhar mais leve)
   // Quando outro computador gravar, recarrega SO o que mudou (economia de dados).
   // Antes: qualquer mudanca rebaixava TODAS as tabelas/blobs a cada evento, e havia
   // ainda uma busca completa a cada 20s. Isso estourava a cota de trafego (egress).
