@@ -712,24 +712,34 @@ const TODAS_EMPRESAS=[];
 const USUARIOS={
   patty: {nome:'Patty',  cor:'#4a1c1c', role:'gestora'},
   diane: {nome:'Diane',  cor:'#6b7a4e', role:'gestora'},
-  cris:  {nome:'Tati',cor:'#16a34a',role:'equipe',setor:'fiscal'},
-  cleo:  {nome:'Cleonice', cor:'#0891b2',role:'equipe',setor:'fiscal'},
-  julia: {nome:'Julia',    cor:'#d97706',role:'equipe',setor:'fiscal'},
-  gab:   {nome:'Gabriela', cor:'#9ca3af',role:'equipe',setor:'fiscal',licenca:false},
-  carla: {nome:'Carla',    cor:'#7c3aed',role:'equipe',setor:'contabil'},
-  neusa: {nome:'Neusa',    cor:'#dc2626',role:'equipe',setor:'contabil'},
+  cris:  {nome:'Tati',cor:'#2563eb',role:'equipe',setor:'fiscal'},
+  cleo:  {nome:'Cleonice', cor:'#9333ea',role:'equipe',setor:'fiscal'},
+  julia: {nome:'Julia',    cor:'#92400e',role:'equipe',setor:'fiscal'},
+  gab:   {nome:'Gabriela', cor:'#16a34a',role:'equipe',setor:'fiscal',licenca:false},
+  carla: {nome:'Carla',    cor:'#db2777',role:'equipe',setor:'contabil'},
+  neusa: {nome:'Neusa',    cor:'#ca8a04',role:'equipe',setor:'contabil'},
 };
 
 const MEMBROS_FISCAL=[
-  {id:'cris', nome:'Tati',cor:'#16a34a',empresas:EMP_CRIS},
-  {id:'cleo', nome:'Cleonice', cor:'#0891b2',empresas:EMP_CLEO},
-  {id:'julia',nome:'Julia',    cor:'#d97706',empresas:EMP_JULIA},
-  {id:'gab',  nome:'Gabriela', cor:'#9ca3af',empresas:EMP_GAB,licenca:false},
+  {id:'cris', nome:'Tati',cor:'#2563eb',empresas:EMP_CRIS},
+  {id:'cleo', nome:'Cleonice', cor:'#9333ea',empresas:EMP_CLEO},
+  {id:'julia',nome:'Julia',    cor:'#92400e',empresas:EMP_JULIA},
+  {id:'gab',  nome:'Gabriela', cor:'#16a34a',empresas:EMP_GAB,licenca:false},
 ];
 const MEMBROS_CONTABIL=[
-  {id:'carla',nome:'Carla',cor:'#7c3aed'},
-  {id:'neusa',nome:'Neusa',cor:'#dc2626'},
+  {id:'carla',nome:'Carla',cor:'#db2777'},
+  {id:'neusa',nome:'Neusa',cor:'#ca8a04'},
 ];
+// Fotos das meninas: arquivos em assets/fotos/<id>.jpg. Só os ids aqui mostram foto;
+// os demais caem na inicial colorida. _FOTO_V = cache-bust ao trocar uma foto.
+const FOTOS=new Set(['julia','carla','cleo','cris','gab','neusa','patty','diane']);
+const _FOTO_V='1';
+function _avInner(id,nome,cor){
+  const ini=(nome&&nome[0])||'?';
+  if(id&&FOTOS.has(id))
+    return `<img src="assets/fotos/${id}.jpg?v=${_FOTO_V}" alt="${nome}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;border:2px solid ${cor};box-sizing:border-box;" onerror="this.replaceWith(document.createTextNode('${ini}'))">`;
+  return ini;
+}
 const TODOS_MEMBROS=[...MEMBROS_FISCAL,...MEMBROS_CONTABIL];
 
 const PAD_FISCAL=[
@@ -1175,7 +1185,7 @@ function initLogin(){
     const div=document.createElement('div');
     div.className='login-btn'+(u.role==='gestora'?' gestora':'');
     div.dataset.id=id;div.onclick=()=>selecionarUser(id);
-    div.innerHTML=`<div class="lav" style="background:${u.cor}">${u.nome[0]}</div><div class="lnome">${u.nome}</div><div class="ltag">${u.role==='gestora'?'✦ Gestora':u.setor==='fiscal'?'Fiscal':'Contábil'}${u.licenca?' · Licença':''}</div>`;
+    div.innerHTML=`<div class="lav" style="background:${u.cor}">${_avInner(id,u.nome,u.cor)}</div><div class="lnome">${u.nome}</div><div class="ltag">${u.role==='gestora'?'✦ Gestora':u.setor==='fiscal'?'Fiscal':'Contábil'}${u.licenca?' · Licença':''}</div>`;
     grid.appendChild(div);
   });
 }
@@ -1231,7 +1241,7 @@ function sair(){
 async function iniciarApp(){
   const u=USUARIOS[usuarioAtual];
   const d=new Date();mesAtual=mesKeyFn(new Date(d.getFullYear(),d.getMonth()-1,1)); // padrao = mes anterior (competencia que a equipe esta trabalhando)
-  document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${u.nome[0]}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
+  document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${_avInner(usuarioAtual,u.nome,u.cor)}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
   const nav=document.getElementById('nav-wrap');nav.innerHTML='';
   if(isGestora()){
     ['monitor','fiscal','contabil','relatorios','admin'].forEach(v=>{
@@ -1351,7 +1361,7 @@ function renderMembros(){
   visiveis.forEach(m=>{
     const div=document.createElement('div');div.className='membro-btn'+(membroAtual===m.id?' active':'');
     div.onclick=()=>selecionarMembro(m.id);
-    div.innerHTML=`<div class="mavatar" style="background:${m.cor}">${m.nome[0]}</div><div class="minfo2"><div class="mn">${m.nome}</div>${m.licenca?'<span class="licenca-pill">Licença</span>':`<div class="mt">${empresasDoMembro(m.id,mesAtual).length} emp.</div>`}</div>`;
+    div.innerHTML=`<div class="mavatar" style="background:${m.cor}">${_avInner(m.id,m.nome,m.cor)}</div><div class="minfo2"><div class="mn">${m.nome}</div>${m.licenca?'<span class="licenca-pill">Licença</span>':`<div class="mt">${empresasDoMembro(m.id,mesAtual).length} emp.</div>`}</div>`;
     el.appendChild(div);
   });
 }
