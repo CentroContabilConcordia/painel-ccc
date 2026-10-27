@@ -1407,6 +1407,8 @@ function criarEmpItem(emp,setor,mk,cor){
   if(_f.filial===true && _f.municipio)html+=`<div style="font-size:10px;color:var(--muted);margin-top:2px;">📍 ${_f.municipio}${_f.estado?'/'+_f.estado:''}</div>`;
   const _g=_f.gestora, _gu=(_g&&USUARIOS[_g])?USUARIOS[_g]:null;
   if(_gu)html+=`<div style="font-size:10px;font-weight:600;color:${_gu.cor};margin-top:2px;">👤 Gestora: ${_gu.nome}</div>`;
+  // No Contábil, mostra quem faz o FISCAL dessa empresa (dono do mês), pra se reportar direto.
+  if(setor==='contabil'){ try{ const _fo=ownerNoMes(emp,mesAtual); const _fu=_fo&&USUARIOS[_fo]?USUARIOS[_fo]:null; if(_fu)html+=`<div style="font-size:10px;font-weight:600;color:${_fu.cor};margin-top:2px;">📊 Faz o fiscal: ${_fu.nome}</div>`; }catch(e){} }
   if(setor==='contabil'&&respM)html+=`<div class="emp-resp-tag">▶ ${respM.nome}</div>`;
   html+=_pz;
   if(total>0)html+=`<div class="emp-meta"><span>${pg.feitas}/${pg.aplic} feitas</span><span>${pct}%</span></div><div class="emp-prog"><div class="emp-prog-f" style="width:${pct}%;background:${cor}"></div></div>`;
