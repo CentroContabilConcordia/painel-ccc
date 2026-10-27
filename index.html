@@ -454,6 +454,7 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
   </div>
 
   <div class="rel-wrap" id="painel-monitor" style="display:none"></div>
+  <div class="rel-wrap" id="painel-pendencias" style="display:none"></div>
   <div class="rel-wrap" id="painel-processos" style="display:none"></div>
   <div class="rel-wrap" id="painel-contabanual" style="display:none"></div>
   <style>
@@ -1243,6 +1244,9 @@ async function iniciarApp(){
     }
     document.getElementById('btn-add-tarefa').style.display='none';
   }
+  // Aba "Pendências" — cada um vê o que está atrasado + o do mês sendo feito
+  const bpe=document.createElement('button');bpe.className='nav-btn';bpe.textContent='📋 Pendências';
+  bpe.onclick=()=>trocarView('pendencias',bpe);nav.appendChild(bpe);
   // Aba "Processos Questor" — todos veem e podem editar
   const bp=document.createElement('button');bp.className='nav-btn';bp.textContent='📖 Processos';
   bp.onclick=()=>trocarView('processos',bp);nav.appendChild(bp);
@@ -1294,14 +1298,16 @@ function trocarView(v,btn){
   viewAtual=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual');
+  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias');
   document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
   document.getElementById('painel-admin').style.display=v==='admin'?'block':'none';
   document.getElementById('painel-monitor').style.display=v==='monitor'?'block':'none';
+  document.getElementById('painel-pendencias').style.display=v==='pendencias'?'block':'none';
   document.getElementById('painel-processos').style.display=v==='processos'?'block':'none';
   document.getElementById('painel-contabanual').style.display=v==='contabanual'?'block':'none';
   document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews?'':'none';
+  if(v==='pendencias'){renderPendencias();return;}
   if(v==='monitor'){initMonitor();return;}
   if(v==='relatorios'){initRelatorios();return;}
   if(v==='admin'){initAdmin();return;}
@@ -1620,6 +1626,66 @@ function renderHistorico(col,cor){
 // ══════════════════════════════
 // RELATÓRIOS
 // ══════════════════════════════
+// ══ Aba PENDÊNCIAS: tudo atrasado + o do mês sendo feito, por usuária ══
+let _pendSel=null, _pendRows=[], _pendSubj=null;
+function _pendItens(setor,mk,filtroResp){
+  const bucket=db[setor]&&db[setor][mk]; if(!bucket)return [];
+  // Só o mês sendo feito (mesAtual) — atrasadas + a fazer. (meses anteriores eram teste)
+  const itens=[];
+  Object.keys(bucket).forEach(emp=>{
+    if(!empAtiva(emp))return;
+    const md=bucket[emp][mesAtual]; if(!md)return;
+    if(filtroResp && md.responsavel!==filtroResp)return;
+    (md.tarefas||[]).forEach(t=>{
+      if(t.status==='concluido'||t.status==='naoseaplica')return;
+      let prazo=null,dias=null,venceu=false;
+      try{const pi=_prazoInfo(t,mesAtual); if(pi.prazo){prazo=pi.prazo;dias=pi.dias;venceu=pi.venceu||pi.hoje;}}catch(e){}
+      const atrasada=venceu||t.status==='atrasado';
+      itens.push({emp,desc:t.desc,mes:mesAtual,status:t.status,prazo,dias,atrasada});
+    });
+  });
+  itens.sort((a,b)=>{ if(a.atrasada!==b.atrasada)return a.atrasada?-1:1; const da=a.dias==null?99999:a.dias, dbb=b.dias==null?99999:b.dias; return da-dbb || a.emp.localeCompare(b.emp,'pt'); });
+  return itens;
+}
+function renderPendencias(){
+  const host=document.getElementById('painel-pendencias'); const u=USUARIOS[usuarioAtual];
+  let seletor='', subj=null;
+  if(isGestora()){
+    const opts=[...MEMBROS_FISCAL.map(m=>({id:m.id,setor:'fiscal',mk:m.id,nome:m.nome})), ...MEMBROS_CONTABIL.map(m=>({id:m.id,setor:'contabil',mk:'contabil',filtroResp:m.id,nome:m.nome}))];
+    if(!_pendSel||!opts.find(o=>o.id===_pendSel))_pendSel=opts[0]?opts[0].id:null;
+    subj=opts.find(o=>o.id===_pendSel)||opts[0];
+    seletor=`<div style="margin:10px 0;">Ver pendências de: <select onchange="_pendSel=this.value;renderPendencias();" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-weight:600;">${opts.map(o=>`<option value="${o.id}"${o.id===_pendSel?' selected':''}>${o.nome}</option>`).join('')}</select></div>`;
+  } else if(u.setor==='fiscal'){ subj={setor:'fiscal',mk:usuarioAtual,nome:u.nome}; }
+  else { subj={setor:'contabil',mk:'contabil',filtroResp:usuarioAtual,nome:u.nome}; }
+  const itens=subj?_pendItens(subj.setor,subj.mk,subj.filtroResp):[];
+  _pendRows=itens; _pendSubj=subj;
+  const nAtr=itens.filter(i=>i.atrasada).length, nMes=itens.length-nAtr;
+  let html=`<div class="rel-titulo">📋 Pendências${subj?' · '+subj.nome:''}</div>
+    <div class="rel-sub">Tudo que está <b>atrasado</b> + o que falta no mês <b>${mesLabel(mesAtual)}</b> · clique numa linha pra abrir a empresa</div>
+    ${seletor}
+    <div style="display:flex;gap:18px;margin:12px 0 14px;font-size:14px;font-weight:700;">
+      <span style="color:var(--red)">🔴 ${nAtr} atrasada${nAtr===1?'':'s'}</span>
+      <span style="color:#d97706">⏳ ${nMes} a fazer no mês</span></div>`;
+  if(itens.length===0){
+    html+=`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:26px;text-align:center;color:var(--muted);">Nada atrasado e nada pendente neste mês. 🎉</div>`;
+  }else{
+    html+=`<table class="rel-table"><thead><tr><th style="width:70px;"></th><th>Empresa</th><th>Tarefa</th><th>Competência</th><th>Prazo</th></tr></thead><tbody>`;
+    itens.forEach((i,idx)=>{
+      const ic=i.atrasada?`<span style="color:var(--red);font-weight:700;">🔴 ${i.dias!=null&&i.dias<0?Math.abs(i.dias)+'d':'hoje'}</span>`:`<span style="color:#d97706;">⏳</span>`;
+      const pz=i.prazo?_ddmm(new Date(i.prazo)):'—';
+      html+=`<tr style="cursor:pointer;" onclick="abrirPendenciaIdx(${idx})"><td>${ic}</td><td>${i.emp}</td><td>${i.desc}</td><td style="color:var(--muted)">${mesLabel(i.mes)}</td><td>${pz}</td></tr>`;
+    });
+    html+=`</tbody></table>`;
+  }
+  host.innerHTML=html;
+}
+function abrirPendenciaIdx(idx){
+  const i=_pendRows[idx], s=_pendSubj; if(!i||!s)return;
+  setorAtual=s.setor; mesAtual=i.mes; if(s.setor==='fiscal')membroAtual=s.mk;
+  const btn=[...document.querySelectorAll('.nav-btn')].find(b=>b.textContent.includes(s.setor==='fiscal'?'Setor Fiscal':'Setor Contábil'));
+  trocarView(s.setor,btn);
+  selecionarEmpresa(i.emp);
+}
 function _nomePessoa(rid){ return (USUARIOS[rid]&&USUARIOS[rid].nome) || ((TODOS_MEMBROS.find(m=>m.id===rid)||{}).nome) || rid; }
 function _corPessoa(rid){ return (USUARIOS[rid]&&USUARIOS[rid].cor) || '#6b7280'; }
 // Navega os meses no Monitoramento (comparar mês a mês)
