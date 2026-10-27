@@ -861,7 +861,17 @@ async function saveBancos(){
 }
 let _loadedV=0; // versão do blob de tarefas que está carregada no local (p/ detectar conflito ao salvar)
 async function loadDB(){
-  try{const r=await window.storage.get(SK,true);if(r&&r.value){const d=JSON.parse(r.value);db=d.db||{};nextId=d.n||1;_loadedV=d.v||0;}}
+  try{const r=await window.storage.get(SK,true);if(r&&r.value){const d=JSON.parse(r.value);const srv=d.db||{};
+    // MERGE preservando o que ESTE usuário ainda não salvou (_dirty). Antes fazia db=srv e, quando o
+    // realtime/visibilitychange recarregava, apagava a marcação recém-feita e ainda não gravada
+    // ("marca e some"). Agora traz o blob do servidor por cima, mas NUNCA mexe nas empresas-mês que
+    // estão em _dirty (edição local pendente). Na 1ª carga db está vazio -> cópia completa.
+    for(const s in srv)for(const mk in srv[s])for(const emp in srv[s][mk])for(const mes in srv[s][mk][emp]){
+      if(_dirty.has(s+'|'+mk+'|'+emp+'|'+mes))continue; // mantém a edição local não salva
+      if(!db[s])db[s]={}; if(!db[s][mk])db[s][mk]={}; if(!db[s][mk][emp])db[s][mk][emp]={};
+      db[s][mk][emp][mes]=srv[s][mk][emp][mes];
+    }
+    nextId=Math.max(nextId||1,d.n||1);_loadedV=d.v||0;}}
   catch(e){try{const l=localStorage.getItem(SK);if(l){const d=JSON.parse(l);db=d.db||{};nextId=d.n||1;}}catch(e2){}}
 }
 // Aviso visível de "não salvo" (fixo no rodapé). Aparece se o salvar falhar; some quando salva.
