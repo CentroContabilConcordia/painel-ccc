@@ -980,14 +980,20 @@ async function saveContabAnual(){
 const CA_MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CA_CICLO={'':'feito','feito':'na','na':''};
 let _caRows=[];
+// Data de Abertura (Opção A): empresa não entra num ano anterior à sua abertura; e no ano de
+// abertura, os meses antes do mês de abertura ficam como "não existia" (cinza, fora das contas).
+// Sem data de abertura preenchida (nasc=0) não dá p/ saber -> continua aparecendo normal.
+function _caNascAAMM(n){ const ab=((fichas[n]||{}).abertura||''); if(ab.length<7)return 0; const a=parseInt(ab.slice(0,4),10),m=parseInt(ab.slice(5,7),10); return (a&&m)?a*100+m:0; }
+function _caNaoExistia(n,ano,m){ const nasc=_caNascAAMM(n); return nasc>0 && nasc > parseInt(ano,10)*100+m; }
+function _caAbriuDepoisDoAno(n,ano){ const nasc=_caNascAAMM(n); return nasc>0 && Math.floor(nasc/100) > parseInt(ano,10); }
 function _caEmpresasVisiveis(){
-  let arr=TODAS_EMPRESAS.filter(n=>empAtiva(n));
+  let arr=TODAS_EMPRESAS.filter(n=>empAtiva(n) && !_caAbriuDepoisDoAno(n,_caAno));
   if(_caBusca){const q=_caBusca.toLowerCase();arr=arr.filter(n=>n.toLowerCase().includes(q));}
   if(_caRespFiltro){arr=arr.filter(n=>((fichas[n]||{}).respContabil||'')===_caRespFiltro);}
   if(_caSoPend){
     const hoje=new Date();
     const lim=(parseInt(_caAno)===hoje.getFullYear())?(hoje.getMonth()+1):12;
-    arr=arr.filter(n=>{const e=(contabAnual[_caAno]||{})[n];for(let m=1;m<=lim;m++){const v=(e&&e.meses&&e.meses[m])||'';if(v==='')return true;}return false;});
+    arr=arr.filter(n=>{const e=(contabAnual[_caAno]||{})[n];for(let m=1;m<=lim;m++){if(_caNaoExistia(n,_caAno,m))continue;const v=(e&&e.meses&&e.meses[m])||'';if(v==='')return true;}return false;});
   }
   return arr;
 }
@@ -1011,7 +1017,7 @@ function renderContabAnual(){
         <option value="">Todos responsáveis</option>
         ${MEMBROS_CONTABIL.map(m=>`<option value="${m.id}" ${_caRespFiltro===m.id?'selected':''}>${m.nome}</option>`).join('')}
       </select>
-      <span style="font-size:11px;color:var(--muted);">✓ feito · – não se aplica · · pendente${_caPodeEditar()?' — clique p/ alternar':''}</span>
+      <span style="font-size:11px;color:var(--muted);">✓ feito · – não se aplica · · pendente · <span style="background:#eef1f4;color:#c3ccd6;padding:0 4px;border-radius:3px;">·</span> cinza = não existia${_caPodeEditar()?' — clique p/ alternar':''}</span>
       ${_caPodeEditar()?'':'<span style="font-size:11px;color:var(--accent);font-weight:600;">👁️ Somente leitura (edição: contábil e gestoras)</span>'}
     </div>
     <div id="ca-tablehost"></div>`;
@@ -1025,13 +1031,13 @@ function renderCaTable(){
   const N=_caRows.length;
   // totais por coluna (só "feito")
   const tot={}; for(let m=1;m<=12;m++)tot['m'+m]=0; tot.balanco=0;tot.ecd=0;tot.ecf=0;
-  _caRows.forEach(n=>{const e=(contabAnual[ano]||{})[n];if(!e)return;const ms=e.meses||{};for(let m=1;m<=12;m++)if(ms[m]==='feito')tot['m'+m]++;['balanco','ecd','ecf'].forEach(c=>{if(e[c]==='feito')tot[c]++;});});
+  _caRows.forEach(n=>{const e=(contabAnual[ano]||{})[n];if(!e)return;const ms=e.meses||{};for(let m=1;m<=12;m++){if(_caNaoExistia(n,ano,m))continue;if(ms[m]==='feito')tot['m'+m]++;}['balanco','ecd','ecf'].forEach(c=>{if(e[c]==='feito')tot[c]++;});});
   const head=`<tr><th class="ca-emp">Empresa (${N})</th>${CA_MESES.map(m=>`<th>${m}</th>`).join('')}<th class="ca-annual">Balanço</th><th class="ca-annual">ECD</th><th class="ca-annual">ECF</th><th style="text-align:left;">Observações</th></tr>`;
   const totrow=`<tr class="ca-tot"><td class="ca-emp">✓ feitas</td>${CA_MESES.map((_,i)=>`<td>${tot['m'+(i+1)]}</td>`).join('')}<td>${tot.balanco}</td><td>${tot.ecd}</td><td>${tot.ecf}</td><td></td></tr>`;
   const gest=isGestora(); const ro=!_caPodeEditar();
   const rows=_caRows.map((n,idx)=>{
     const e=(contabAnual[ano]||{})[n]||{}; const ms=e.meses||{}; const lock=e.bloqueado===true; const trava=lock||ro;
-    let tds=''; for(let m=1;m<=12;m++) tds+=_caCell(idx,'m'+m,ms[m]||'','',trava);
+    let tds=''; for(let m=1;m<=12;m++){ if(_caNaoExistia(n,ano,m)) tds+=`<td class="ca-cell" style="background:#eef1f4;color:#c3ccd6;cursor:default;" title="Empresa ainda não existia (abertura ${_escAttrP((fichas[n]||{}).abertura||'')})">·</td>`; else tds+=_caCell(idx,'m'+m,ms[m]||'','',trava); }
     tds+=_caCell(idx,'balanco',e.balanco||'',' ca-annual',trava);
     tds+=_caCell(idx,'ecd',e.ecd||'',' ca-annual',trava);
     tds+=_caCell(idx,'ecf',e.ecf||'',' ca-annual',trava);
