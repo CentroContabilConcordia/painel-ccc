@@ -940,25 +940,29 @@ async function _doSave(){
 }
 // Salva já (sem esperar o debounce) ao esconder/sair da aba, pra não deixar nada pendente.
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && (_saveTimer||_dirty.size)){ if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;} _doSave(); } });
-// Backup automático das tarefas DENTRO do painel: tira uma cópia ao MEIO-DIA e no FIM do dia,
-// guardada em chaves separadas que rotacionam por dia da semana (~7 dias de histórico). Roda
-// na sessão de quem estiver com o painel aberto nesses horários; um log pequeno evita repetir.
+// Backup LEVE das tarefas dentro do painel: 2 cópias/dia — MEIO-DIA (>=12h, pega a manhã) e
+// NOITE (>=18h, dia fechado). Feito da MEMÓRIA (não relê o blob de 3,4MB — era isso que pesava),
+// por UMA sessão (flag diária por slot no servidor + guard local nesta sessão), girando por dia
+// da semana (7 dias de cada). À PROVA DE STORM: se falhar, NÃO insiste no mesmo dia (marca o guard
+// antes de gravar) — a outra faixa, outra sessão ou o dia seguinte cobre, e o Supabase diário fica
+// por baixo. Chaves: ccc_bak_<slot>_<0..6> (cópia) e ccc_bak_dia_<slot> (data da última, minúscula).
+let _bakGuard={}; // {slot:'AAAA-MM-DD'} — slot já cuidado por ESTA sessão hoje
 async function _autoBackup(){
   try{
     const now=new Date();
     const hoje=now.getFullYear()+'-'+('0'+(now.getMonth()+1)).slice(-2)+'-'+('0'+now.getDate()).slice(-2);
-    const h=now.getHours()+now.getMinutes()/60, dow=now.getDay();
-    const slots=[]; if(h>=12)slots.push('meiodia'); if(h>=18)slots.push('fim');
-    if(!slots.length)return;
-    let logv={}; try{const r=await window.storage.get('ccc_bak_log'); if(r&&r.value)logv=JSON.parse(r.value)||{};}catch(e){}
-    let mudou=false;
+    const h=now.getHours(), dow=now.getDay();
+    const slots=[]; if(h>=12&&h<18)slots.push('meiodia'); if(h>=18)slots.push('noite');
     for(const slot of slots){
-      if(logv[slot]===hoje)continue; // já tirou hoje
-      const r=await window.storage.get(SK,true); if(!(r&&r.value))continue;
-      await window.storage.set('ccc_bak_'+slot+'_'+dow, r.value); // cópia do blob atual (rotaciona por dia da semana)
-      logv[slot]=hoje; mudou=true;
+      if(_bakGuard[slot]===hoje)continue;                            // esta sessão já tratou hoje
+      let feito=''; try{const r=await window.storage.get('ccc_bak_dia_'+slot); if(r&&r.value)feito=String(r.value);}catch(e){}
+      if(feito===hoje){ _bakGuard[slot]=hoje; continue; }            // outra sessão já fez hoje
+      _bakGuard[slot]=hoje;                                          // marca ANTES (mesmo se falhar, não repete hoje)
+      try{
+        await window.storage.set('ccc_bak_'+slot+'_'+dow, JSON.stringify({db,n:nextId,v:_loadedV,em:now.toISOString()}));
+        await window.storage.set('ccc_bak_dia_'+slot, hoje);
+      }catch(e){ console.warn('[CCC] backup '+slot+' falhou (tenta outra sessão/amanhã)', e); }
     }
-    if(mudou)await window.storage.set('ccc_bak_log', JSON.stringify(logv));
   }catch(e){ console.warn('[CCC] auto-backup falhou', e); }
 }
 async function loadProcessos(){
@@ -1287,7 +1291,10 @@ async function iniciarApp(){
   await loadColaboradores();
   await loadProcessos();
   await loadContabAnual();
-  // (backup automático desativado temporariamente — estava sobrecarregando; redesenhar mais leve)
+  // Backup leve (2x/dia, da memória, 1 sessão). Checa no início e a cada 30 min — o timer só lê
+  // a flag minúscula e o relógio; a cópia de verdade sai no máx 2x no dia inteiro (meio-dia e noite).
+  _autoBackup();
+  if(!window._bakTimer) window._bakTimer=setInterval(_autoBackup, 30*60*1000);
   // Quando outro computador gravar, recarrega SO o que mudou (economia de dados).
   // Antes: qualquer mudanca rebaixava TODAS as tabelas/blobs a cada evento, e havia
   // ainda uma busca completa a cada 20s. Isso estourava a cota de trafego (egress).
