@@ -895,12 +895,25 @@ function _avisoSalvar(mostrar){
     el.innerHTML='⚠️ Suas marcações ainda <u>não foram salvas</u> — tentando salvar… <b>mantenha a página aberta.</b>';
   } else if(el){ el.remove(); }
 }
+// Status POSITIVO de salvamento (canto inferior direito): "Salvando…" (âmbar) -> "✓ Salvo" (verde,
+// some sozinho). Dá certeza pras meninas de que podem sair/trocar de empresa sem perder nada.
+let _statusTimer=null;
+function _statusSalvar(mode){
+  let el=document.getElementById('status-salvar');
+  if(!el){ el=document.createElement('div'); el.id='status-salvar';
+    el.style.cssText='position:fixed;bottom:16px;right:16px;z-index:99998;padding:7px 13px;border-radius:8px;font-size:12px;font-weight:700;box-shadow:0 3px 12px rgba(0,0,0,.18);transition:opacity .4s;pointer-events:none;';
+    document.body.appendChild(el); }
+  if(_statusTimer){clearTimeout(_statusTimer);_statusTimer=null;}
+  if(mode==='pend'){ el.style.background='#fef3c7'; el.style.color='#92400e'; el.style.opacity='1'; el.textContent='💾 Salvando…'; }
+  else if(mode==='ok'){ el.style.background='#dcfce7'; el.style.color='#166534'; el.style.opacity='1'; el.textContent='✓ Salvo'; _statusTimer=setTimeout(()=>{ if(el)el.style.opacity='0'; },1600); }
+}
 // SALVAR COM MERGE: grava só as empresas-mês que ESTE usuário mexeu, por cima do blob mais novo
 // do servidor, e traz pro local o trabalho dos outros — NUNCA sobrescreve o que outra pessoa
 // salvou (antes, uma sessão desatualizada gravava o blob inteiro por cima e apagava tudo).
 function saveDB(){ // agenda (debounce) e retorna rápido — não trava a UI
+  _statusSalvar('pend');
   if(_saveTimer)clearTimeout(_saveTimer);
-  _saveTimer=setTimeout(()=>{_saveTimer=null;_doSave();},800);
+  _saveTimer=setTimeout(()=>{_saveTimer=null;_doSave();},350);
   return Promise.resolve();
 }
 async function _doSave(){
@@ -927,7 +940,7 @@ async function _doSave(){
     await window.storage.set(SK, JSON.stringify({db,n:nextId,v:novoV}), true);
     try{ await window.storage.set(SK+'_v', String(novoV)); }catch(e){}
     _loadedV=novoV;
-    _saveFails=0; if(_saveRetry){clearTimeout(_saveRetry);_saveRetry=null;} _avisoSalvar(false);
+    _saveFails=0; if(_saveRetry){clearTimeout(_saveRetry);_saveRetry=null;} _avisoSalvar(false); _statusSalvar('ok');
   }catch(e){
     if(savingKeys)savingKeys.forEach(k=>_dirty.add(k)); // devolve p/ não perder
     try{localStorage.setItem(SK,JSON.stringify({db,n:nextId}));}catch(e2){}
@@ -940,6 +953,11 @@ async function _doSave(){
 }
 // Salva já (sem esperar o debounce) ao esconder/sair da aba, pra não deixar nada pendente.
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && (_saveTimer||_dirty.size)){ if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;} _doSave(); } });
+// Rede de seguranca contra o "fechei antes de salvar": se ainda ha algo pendente (ou salvando),
+// o navegador PERGUNTA antes de sair/fechar — assim nenhuma marcacao se perde por pressa.
+window.addEventListener('beforeunload',(e)=>{ if(_dirty.size||_saving||_saveTimer){ e.preventDefault(); e.returnValue=''; } });
+// pagehide: ultima tentativa de disparar a gravacao ao sair (ex.: trocar de app no celular).
+window.addEventListener('pagehide',()=>{ if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;} if(_dirty.size)_doSave(); });
 // Backup LEVE das tarefas dentro do painel: 2 cópias/dia — MEIO-DIA (>=12h, pega a manhã) e
 // NOITE (>=18h, dia fechado). Feito da MEMÓRIA (não relê o blob de 3,4MB — era isso que pesava),
 // por UMA sessão (flag diária por slot no servidor + guard local nesta sessão), girando por dia
