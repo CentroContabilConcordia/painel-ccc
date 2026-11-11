@@ -2508,10 +2508,10 @@ function renderFicha(col){
         <div class="ficha-campo"><div class="ficha-label">Bairro</div><input class="ficha-input" id="f-bairro" value="${ficha.bairro||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Estado (UF)</div><input class="ficha-input" id="f-estado" value="${ficha.estado||''}" placeholder="Ex: SC" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">CEP</div><input class="ficha-input" id="f-cep" value="${ficha.cep||''}" placeholder="00.000-000" ${ro}/></div>
-        <div class="ficha-campo"><div class="ficha-label">Responsável Fiscal</div>
-          <select class="ficha-select" id="f-respFiscal" ${dis}>
+        <div class="ficha-campo"><div class="ficha-label">Responsável Fiscal <span style="font-weight:400;color:var(--muted);">(quem faz o fiscal — trocar em Administração)</span></div>
+          <select class="ficha-select" id="f-respFiscal" disabled title="Reflete o responsável real (fiscal_owner). A troca é feita na aba Administração.">
             <option value="">— Selecione —</option>
-            ${['cris','cleo','julia','gab'].map(id=>{const m=MEMBROS_FISCAL.find(x=>x.id===id);return m?`<option value="${id}"${ficha.respFiscal===id?' selected':''}>${m.nome}</option>`:''}).join('')}
+            ${(()=>{ const _fo=ownerNoMes(empresaAtual,mesAtual)||fiscalOwnerDe[empresaAtual]||ficha.respFiscal||''; return ['cris','cleo','julia','gab'].map(id=>{const m=MEMBROS_FISCAL.find(x=>x.id===id);return m?`<option value="${id}"${_fo===id?' selected':''}>${m.nome}</option>`:''}).join(''); })()}
           </select>
         </div>
         <div class="ficha-campo"><div class="ficha-label">Responsável Contábil</div>
