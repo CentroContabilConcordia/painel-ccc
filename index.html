@@ -874,6 +874,7 @@ async function saveBancos(){
 }
 let _loadedV=0; // versão do blob de tarefas que está carregada no local (p/ detectar conflito ao salvar)
 async function loadDB(){
+  if(_useCells()) return loadDBCells();   // modo novo (salvar leve por célula) — ver bloco MODO CÉLULAS
   try{const r=await window.storage.get(SK,true);if(r&&r.value){const d=JSON.parse(r.value);const srv=d.db||{};
     // MERGE preservando o que ESTE usuário ainda não salvou (_dirty). Antes fazia db=srv e, quando o
     // realtime/visibilitychange recarregava, apagava a marcação recém-feita e ainda não gravada
@@ -920,6 +921,7 @@ function saveDB(){ // agenda (debounce) e retorna rápido — não trava a UI
   return Promise.resolve();
 }
 async function _doSave(){
+  if(_useCells()) return _doSaveCells();   // modo novo (salvar leve por célula)
   if(_saving){ _saveAgain=true; return; }
   _saving=true; let savingKeys=null;
   try{
@@ -953,6 +955,79 @@ async function _doSave(){
     _saving=false;
     if(_saveAgain){ _saveAgain=false; _doSave(); }
   }
+}
+// ============================================================
+// MODO CÉLULAS ("salvar mais leve") — cada empresa-mês vira UMA chave kv_store: 'tc:setor|mk|emp|mes'.
+// Marcar 1 tarefa grava só ~3KB (a célula), não o blob de 4,3MB. Cada célula é uma LINHA própria no
+// banco → duas pessoas em empresas diferentes nunca se sobrescrevem (blindagem de concorrência).
+// DESLIGADO por padrão: só liga quando localStorage['ccc_modo']==='celulas' (virada controlada,
+// com a Patrícia). Enquanto desligado, tudo continua no blob ccc_v8 e a equipe não sente nada.
+// O blob ccc_v8 fica INTACTO como backup até a virada final. Ver [[revisao-antes-de-implementar]].
+// ============================================================
+const CELL_PREFIX='tc:';
+let CELLS_DEFAULT=false; // VIRA true na virada final (etapa 4), depois da migração e com todas recarregando
+// Interruptor: localStorage por navegador ('celulas' liga / 'blob' desliga) vence; senão usa o padrão.
+// Assim: teste liga só no meu navegador; virada = trocar CELLS_DEFAULT p/ true; rollback = voltar p/ false.
+function _useCells(){ try{ const o=localStorage.getItem('ccc_modo'); if(o==='celulas')return true; if(o==='blob')return false; }catch(e){} return CELLS_DEFAULT; }
+function _cellKey(s,mk,emp,mes){ return CELL_PREFIX+s+'|'+mk+'|'+emp+'|'+mes; }
+function _parseCellKey(k){
+  if(!k||k.indexOf(CELL_PREFIX)!==0)return null;
+  const p=k.slice(CELL_PREFIX.length).split('|');
+  if(p.length!==4)return null;            // nomes com '|' não existem (verificado); se existir, ignora
+  return {s:p[0],mk:p[1],emp:p[2],mes:p[3]};
+}
+async function loadDBCells(){
+  try{
+    const all=await window.Backend.getAllCells(); // [{key,value}] — todas as células de uma vez (paginado)
+    for(const row of all){
+      const p=_parseCellKey(row.key); if(!p)continue;
+      if(p.s!=='fiscal'&&p.s!=='contabil')continue; // ignora chaves tc: estranhas (teste/lixo); DELETE é bloqueado na kv_store
+      const dk=p.s+'|'+p.mk+'|'+p.emp+'|'+p.mes;
+      if(_dirty.has(dk))continue;          // preserva edição local ainda não salva (mesma regra do blob)
+      let cell; try{ cell=JSON.parse(row.value); }catch(e){ continue; }
+      if(!db[p.s])db[p.s]={}; if(!db[p.s][p.mk])db[p.s][p.mk]={}; if(!db[p.s][p.mk][p.emp])db[p.s][p.mk][p.emp]={};
+      db[p.s][p.mk][p.emp][p.mes]=cell;
+      (cell.tarefas||[]).forEach(t=>{ if(typeof t.id==='number') nextId=Math.max(nextId,t.id+1); });
+    }
+    try{ const rn=await window.storage.get('ccc_cells_n'); if(rn&&rn.value) nextId=Math.max(nextId, parseInt(rn.value,10)||1); }catch(e){}
+  }catch(e){ console.warn('[CCC] loadDBCells falhou',e); }
+}
+async function _doSaveCells(){
+  if(_saving){ _saveAgain=true; return; }
+  _saving=true; let savingKeys=null;
+  try{
+    savingKeys=new Set(_dirty); _dirty.clear();
+    for(const dk of savingKeys){
+      const parts=dk.split('|'); const s=parts[0],mk=parts[1],emp=parts[2],mes=parts[3];
+      const cell=(db[s]&&db[s][mk]&&db[s][mk][emp])?db[s][mk][emp][mes]:undefined;
+      const k=_cellKey(s,mk,emp,mes);
+      if(cell===undefined){ try{ await window.Backend.delCell(k); }catch(e){} continue; }
+      await window.storage.set(k, JSON.stringify(cell)); // upsert POR CHAVE (lança erro se falhar — nunca "silencioso")
+    }
+    try{ await window.storage.set('ccc_cells_n', String(nextId)); }catch(e){}
+    _saveFails=0; if(_saveRetry){clearTimeout(_saveRetry);_saveRetry=null;} _avisoSalvar(false); _statusSalvar('ok');
+  }catch(e){
+    if(savingKeys)savingKeys.forEach(k=>_dirty.add(k)); // devolve p/ não perder
+    _saveFails++; _avisoSalvar(true);
+    if(_saveRetry)clearTimeout(_saveRetry); _saveRetry=setTimeout(_doSave,Math.min(3000*_saveFails,20000));
+  }finally{
+    _saving=false;
+    if(_saveAgain){ _saveAgain=false; _doSave(); }
+  }
+}
+// Recarrega UMA célula (quando o realtime avisa que outra pessoa gravou aquela empresa-mês).
+async function _reloadCell(k){
+  const p=_parseCellKey(k); if(!p)return;
+  if(p.s!=='fiscal'&&p.s!=='contabil')return; // ignora chaves tc: estranhas
+  const dk=p.s+'|'+p.mk+'|'+p.emp+'|'+p.mes;
+  if(_dirty.has(dk))return;                // não sobrescreve edição local pendente
+  try{
+    const r=await window.storage.get(k);
+    if(r&&r.value){ const cell=JSON.parse(r.value);
+      if(!db[p.s])db[p.s]={}; if(!db[p.s][p.mk])db[p.s][p.mk]={}; if(!db[p.s][p.mk][p.emp])db[p.s][p.mk][p.emp]={};
+      db[p.s][p.mk][p.emp][p.mes]=cell;
+    }
+  }catch(e){}
 }
 // Salva já (sem esperar o debounce) ao esconder/sair da aba, pra não deixar nada pendente.
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && (_saveTimer||_dirty.size)){ if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;} _doSave(); } });
@@ -1329,6 +1404,12 @@ async function iniciarApp(){
         const todos=keys.has('*');
         try{
           if(todos||keys.has(SK)){ await loadDB(); if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas(); }
+          if(_useCells()){ // modo novo: recarrega só as células (empresa-mês) que mudaram
+            let _mudouCel=false;
+            if(todos){ await loadDBCells(); _mudouCel=true; }
+            else { for(const kk of keys){ if(kk && kk.indexOf(CELL_PREFIX)===0){ await _reloadCell(kk); _mudouCel=true; } } }
+            if(_mudouCel && empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas();
+          }
           if(todos||keys.has(SK_PROCESSOS)){ await loadProcessos(); if(viewAtual==='processos' && !_procEditando)renderProcessos(); }
           if(todos||keys.has(SK_CONTAB_ANUAL)){ await loadContabAnual(); if(viewAtual==='contabanual'){ if(document.getElementById('ca-tablehost'))renderCaTable(); else renderContabAnual(); } }
           if(todos||keys.has(SK_EMPRESAS_CAD)){ await loadEmpresasCad(); }

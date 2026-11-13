@@ -138,6 +138,25 @@
       const { error } = await _sb.from('empresas').delete().eq('nome', nome);
       if (error) throw error;
       return true;
+    },
+
+    // -------- Modo células (salvar por empresa-mês: chaves 'tc:...') --------
+    // Lê TODAS as células de uma vez (paginado, pra passar do limite de 1000 linhas do PostgREST).
+    async getAllCells() {
+      const out = []; const page = 1000; let from = 0;
+      for (;;) {
+        const { data, error } = await _sb.from('kv_store').select('key,value').like('key', 'tc:%').range(from, from + page - 1);
+        if (error) throw error;
+        out.push(...(data || []));
+        if (!data || data.length < page) break;
+        from += page;
+      }
+      return out;
+    },
+    async delCell(key) {
+      const { error } = await _sb.from('kv_store').delete().eq('key', key);
+      if (error) throw error;
+      return true;
     }
   };
 
