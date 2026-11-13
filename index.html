@@ -721,6 +721,7 @@ const USUARIOS={
   gab:   {nome:'Gabriela', cor:'#16a34a',role:'equipe',setor:'fiscal',licenca:false},
   carla: {nome:'Carla',    cor:'#db2777',role:'equipe',setor:'contabil'},
   neusa: {nome:'Neusa',    cor:'#ca8a04',role:'equipe',setor:'contabil'},
+  alexandra: {nome:'Alexandra', cor:'#0d9488', role:'controle'}, // acesso SÓ ao Controle Anual (view-only). Permissão no banco via tabela profiles.
 };
 
 const MEMBROS_FISCAL=[
@@ -735,7 +736,7 @@ const MEMBROS_CONTABIL=[
 ];
 // Fotos das meninas: arquivos em assets/fotos/<id>.jpg. Só os ids aqui mostram foto;
 // os demais caem na inicial colorida. _FOTO_V = cache-bust ao trocar uma foto.
-const FOTOS=new Set(['julia','carla','cleo','cris','gab','neusa','patty','diane']);
+const FOTOS=new Set(['julia','carla','cleo','cris','gab','neusa','patty','diane','alexandra']);
 const _FOTO_V='1';
 function _avInner(id,nome,cor){
   const ini=(nome&&nome[0])||'?';
@@ -1291,7 +1292,7 @@ function initLogin(){
     const div=document.createElement('div');
     div.className='login-btn'+(u.role==='gestora'?' gestora':'');
     div.dataset.id=id;div.onclick=()=>selecionarUser(id);
-    div.innerHTML=`<div class="lav" style="background:${u.cor}">${_avInner(id,u.nome,u.cor)}</div><div class="lnome">${u.nome}</div><div class="ltag">${u.role==='gestora'?'✦ Gestora':u.setor==='fiscal'?'Fiscal':'Contábil'}${u.licenca?' · Licença':''}</div>`;
+    div.innerHTML=`<div class="lav" style="background:${u.cor}">${_avInner(id,u.nome,u.cor)}</div><div class="lnome">${u.nome}</div><div class="ltag">${u.role==='gestora'?'✦ Gestora':u.role==='controle'?'Controle Anual':u.setor==='fiscal'?'Fiscal':'Contábil'}${u.licenca?' · Licença':''}</div>`;
     grid.appendChild(div);
   });
 }
@@ -1347,9 +1348,14 @@ function sair(){
 async function iniciarApp(){
   const u=USUARIOS[usuarioAtual];
   const d=new Date();mesAtual=mesKeyFn(new Date(d.getFullYear(),d.getMonth()-1,1)); // padrao = mes anterior (competencia que a equipe esta trabalhando)
-  document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${_avInner(usuarioAtual,u.nome,u.cor)}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
+  document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${_avInner(usuarioAtual,u.nome,u.cor)}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.role==='controle'?'Controle Anual':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
   const nav=document.getElementById('nav-wrap');nav.innerHTML='';
-  if(isGestora()){
+  const soControle=(u.role==='controle'); // acesso restrito: vê SÓ a aba Controle Anual
+  if(soControle){
+    const bca0=document.createElement('button');bca0.className='nav-btn active';bca0.textContent='📅 Controle Anual';
+    bca0.onclick=()=>trocarView('contabanual',bca0);nav.appendChild(bca0);
+    document.getElementById('btn-add-tarefa').style.display='none';
+  } else if(isGestora()){
     ['monitor','fiscal','contabil','relatorios','admin'].forEach(v=>{
       const btn=document.createElement('button');btn.className='nav-btn'+(v==='monitor'?' active':'');
       btn.textContent=v==='monitor'?'📡 Monitoramento':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
@@ -1370,15 +1376,17 @@ async function iniciarApp(){
     }
     document.getElementById('btn-add-tarefa').style.display='none';
   }
-  // Aba "Pendências" — cada um vê o que está atrasado + o do mês sendo feito
-  const bpe=document.createElement('button');bpe.className='nav-btn';bpe.textContent='📋 Pendências';
-  bpe.onclick=()=>trocarView('pendencias',bpe);nav.appendChild(bpe);
-  // Aba "Processos Questor" — todos veem e podem editar
-  const bp=document.createElement('button');bp.className='nav-btn';bp.textContent='📖 Processos';
-  bp.onclick=()=>trocarView('processos',bp);nav.appendChild(bp);
-  // Aba "Controle Anual" do contábil — visão do ano por empresa/mês
-  const bca=document.createElement('button');bca.className='nav-btn';bca.textContent='📅 Controle Anual';
-  bca.onclick=()=>trocarView('contabanual',bca);nav.appendChild(bca);
+  if(!soControle){ // os demais veem também Pendências, Processos e Controle Anual
+    // Aba "Pendências" — cada um vê o que está atrasado + o do mês sendo feito
+    const bpe=document.createElement('button');bpe.className='nav-btn';bpe.textContent='📋 Pendências';
+    bpe.onclick=()=>trocarView('pendencias',bpe);nav.appendChild(bpe);
+    // Aba "Processos Questor" — todos veem e podem editar
+    const bp=document.createElement('button');bp.className='nav-btn';bp.textContent='📖 Processos';
+    bp.onclick=()=>trocarView('processos',bp);nav.appendChild(bp);
+    // Aba "Controle Anual" do contábil — visão do ano por empresa/mês
+    const bca=document.createElement('button');bca.className='nav-btn';bca.textContent='📅 Controle Anual';
+    bca.onclick=()=>trocarView('contabanual',bca);nav.appendChild(bca);
+  }
   await loadRef();
   await loadDB();
   await loadFichas();
@@ -1426,7 +1434,7 @@ async function iniciarApp(){
     _ultimoSync=Date.now();
     try{ await loadDB(); if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas(); }catch(e){}
   });
-  trocarView(isGestora()?'monitor':USUARIOS[usuarioAtual].setor,document.querySelector('.nav-btn'));
+  trocarView(isGestora()?'monitor':(u.role==='controle'?'contabanual':USUARIOS[usuarioAtual].setor),document.querySelector('.nav-btn'));
 }
 
 function trocarView(v,btn){
