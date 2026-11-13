@@ -965,7 +965,7 @@ async function _doSave(){
 // O blob ccc_v8 fica INTACTO como backup até a virada final. Ver [[revisao-antes-de-implementar]].
 // ============================================================
 const CELL_PREFIX='tc:';
-let CELLS_DEFAULT=false; // VIRA true na virada final (etapa 4), depois da migração e com todas recarregando
+let CELLS_DEFAULT=true; // LIGADO 12/11/2026 (virada feita: migração blob->tc: conferida, ninguém conectado). Rollback: voltar p/ false.
 // Interruptor: localStorage por navegador ('celulas' liga / 'blob' desliga) vence; senão usa o padrão.
 // Assim: teste liga só no meu navegador; virada = trocar CELLS_DEFAULT p/ true; rollback = voltar p/ false.
 function _useCells(){ try{ const o=localStorage.getItem('ccc_modo'); if(o==='celulas')return true; if(o==='blob')return false; }catch(e){} return CELLS_DEFAULT; }
