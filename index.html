@@ -1675,14 +1675,16 @@ function renderTarefas(){
   hdr.innerHTML=`<div class="eh-nome" title="${empresaAtual}">${empresaAtual}</div><div class="eh-right"><button class="hist-btn" onclick="abrirFichaEmpresaAtual()" title="Abrir a ficha cadastral desta empresa">🏢 Ficha</button><div class="mes-nav"><button class="mes-btn" onclick="navMes(-1)">‹</button><div class="mes-atual">${mesLabel(mesAtual)}</div><button class="mes-btn" onclick="navMes(1)">›</button></div><button class="hist-btn ${verHistorico?'active':''}" onclick="toggleHist()">📅 Histórico</button>${isGestora()?`<button class="btn-primary" onclick="abrirModalTarefa()" style="font-size:11px;padding:4px 9px;">+ Tarefa</button>`:''}</div>`;
   col.appendChild(hdr);
 
-  // ABAS (no setor: Tarefas + Bancos; a Ficha cadastral fica na aba central "Ficha das Empresas")
+  // ABAS (no setor: Tarefas + Bancos + Regime/Importação; a Ficha cadastral e os CNAEs ficam na aba central)
   const tabs=document.createElement('div');tabs.className='emp-tabs';
   tabs.innerHTML=`
-    <div class="emp-tab ${abaEmpresa!=='bancos'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
-    <div class="emp-tab ${abaEmpresa==='bancos'?'active':''}" onclick="trocarAbaEmpresa('bancos')">🏦 Bancos</div>`;
+    <div class="emp-tab ${abaEmpresa!=='bancos'&&abaEmpresa!=='regime'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
+    <div class="emp-tab ${abaEmpresa==='bancos'?'active':''}" onclick="trocarAbaEmpresa('bancos')">🏦 Bancos</div>
+    <div class="emp-tab ${abaEmpresa==='regime'?'active':''}" onclick="trocarAbaEmpresa('regime')">🧾 Regime / Importação</div>`;
   col.appendChild(tabs);
 
   if(abaEmpresa==='bancos'){renderBancos(col);return;}
+  if(abaEmpresa==='regime'){renderRegimeImport(col);return;}
   if(verHistorico){renderHistorico(col,cor);return;}
 
   // Selo do regime vigente no mês (só quando a empresa teve mudança de tributação)
@@ -2770,33 +2772,12 @@ function renderFicha(col){
     </div>
 
     <div class="ficha-section">
-      <div class="ficha-section-titulo">Regime Tributário</div>
-      <div class="ficha-grid">
-        <div class="ficha-campo"><div class="ficha-label">Regime</div>
-          <select class="ficha-select" id="f-regime" ${dis} onchange="atualizarAnexo()">
-            ${['Simples Nacional','Lucro Presumido','Lucro Real','MEI','Imune/Isenta'].map(r=>`<option${ficha.regime===r?' selected':''}>${r}</option>`).join('')}
-          </select>
-        </div>
-        <div class="ficha-campo" id="campo-periodo" style="${(ficha.regime==='Lucro Presumido'||ficha.regime==='Lucro Real')?'':'display:none'}"><div class="ficha-label">Período de Apuração</div>
-          <select class="ficha-select" id="f-periodo" ${dis}>
-            ${['Mensal','Trimestral','Anual'].map(p=>`<option${ficha.periodo===p?' selected':''}>${p}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <div class="ficha-campo" id="campo-cnaes" style="margin-top:12px;">
+      <div class="ficha-section-titulo">Atividades (CNAEs)</div>
+      <div class="ficha-campo" id="campo-cnaes">
         <div class="ficha-label">Atividades (CNAEs) — anexo do Simples e observação por atividade <span style="font-weight:400;color:var(--muted);">(${podeEditar?'marque o anexo e a observação':'somente as gestoras editam'})</span></div>
         <div id="cnaes-lista">${renderCnaesLista(ficha)}</div>
         ${podeEditar?`<button class="contato-add-btn" onclick="cnaeAdd()">+ Adicionar CNAE</button>`:''}
-      </div>
-      ${regimeHistHTML(ficha, podeEditar)}
-      <div class="ficha-grid" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
-        <div class="ficha-campo" style="grid-column:1/-1;">
-          <div style="display:inline-block;font-size:13px;font-weight:700;color:#4338ca;background:#fff3a3;padding:3px 12px;border-radius:5px;margin-bottom:9px;letter-spacing:.3px;">📥 IMPORTAÇÃO DOS ARQUIVOS (FISCAL)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:14px;">
-            ${['Sped','Sintegra','XML','Automação Zen','Outro'].map(o=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:${dis?'default':'pointer'};"><input type="checkbox" class="imp-chk" value="${o}" ${impSel.includes(o)?'checked':''} ${dis}/> ${o}</label>`).join('')}
-          </div>
-        </div>
-        <div class="ficha-campo" style="grid-column:1/-1;"><div class="ficha-label">Observação (importação)</div><textarea class="ficha-input" id="f-importacaoObs" rows="3" style="width:100%;resize:vertical;line-height:1.4;" placeholder="detalhes da importação" ${ro}>${_escP(ficha.importacaoObs||'')}</textarea></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px;">O <strong>Regime Tributário</strong> e a <strong>Importação dos arquivos</strong> ficam na aba <strong>🧾 Regime / Importação</strong>, dentro do Setor Fiscal/Contábil.</div>
       </div>
     </div>
 
@@ -2811,6 +2792,60 @@ function renderFicha(col){
   `;
   col.appendChild(wrap);
   renderObsNovaImgs();
+}
+
+// ═══ ABA REGIME / IMPORTAÇÃO (dentro do Setor Fiscal/Contábil) ═══
+// Mostra Regime Tributário + Histórico de tributação + Importação dos arquivos.
+// Os CNAEs e o resto do cadastro ficam na aba central "Ficha das Empresas".
+function renderRegimeImport(col){
+  const ficha=getFicha(empresaAtual);
+  const podeEditar=isGestora();
+  const ro=podeEditar?'':'readonly'; const dis=podeEditar?'':'disabled';
+  const impSel=(ficha.importacoes&&ficha.importacoes.length)?ficha.importacoes:(ficha.importacao?ficha.importacao.split(/\s*,\s*/).filter(Boolean):[]);
+  const wrap=document.createElement('div');wrap.className='ficha-wrap';
+  wrap.innerHTML=`
+    <div class="ficha-section">
+      <div class="ficha-section-titulo">Regime Tributário</div>
+      <div class="ficha-grid">
+        <div class="ficha-campo"><div class="ficha-label">Regime</div>
+          <select class="ficha-select" id="f-regime" ${dis} onchange="atualizarAnexo()">
+            ${['Simples Nacional','Lucro Presumido','Lucro Real','MEI','Imune/Isenta'].map(r=>`<option${ficha.regime===r?' selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        <div class="ficha-campo" id="campo-periodo" style="${(ficha.regime==='Lucro Presumido'||ficha.regime==='Lucro Real')?'':'display:none'}"><div class="ficha-label">Período de Apuração</div>
+          <select class="ficha-select" id="f-periodo" ${dis}>
+            ${['Mensal','Trimestral','Anual'].map(p=>`<option${ficha.periodo===p?' selected':''}>${p}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px;">As atividades (CNAEs), anexos e tributos por atividade ficam na aba <strong>🏢 Ficha das Empresas</strong>.</div>
+      ${regimeHistHTML(ficha, podeEditar)}
+      <div class="ficha-grid" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
+        <div class="ficha-campo" style="grid-column:1/-1;">
+          <div style="display:inline-block;font-size:13px;font-weight:700;color:#4338ca;background:#fff3a3;padding:3px 12px;border-radius:5px;margin-bottom:9px;letter-spacing:.3px;">📥 IMPORTAÇÃO DOS ARQUIVOS (FISCAL)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:14px;">
+            ${['Sped','Sintegra','XML','Automação Zen','Outro'].map(o=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:${dis?'default':'pointer'};"><input type="checkbox" class="imp-chk" value="${o}" ${impSel.includes(o)?'checked':''} ${dis}/> ${o}</label>`).join('')}
+          </div>
+        </div>
+        <div class="ficha-campo" style="grid-column:1/-1;"><div class="ficha-label">Observação (importação)</div><textarea class="ficha-input" id="f-importacaoObs" rows="3" style="width:100%;resize:vertical;line-height:1.4;" placeholder="detalhes da importação" ${ro}>${_escP(ficha.importacaoObs||'')}</textarea></div>
+      </div>
+      ${podeEditar?`<div style="margin-top:12px;"><button class="ficha-save-btn" onclick="salvarRegimeImport()">💾 Salvar Regime / Importação</button></div>`:'<div style="font-size:12px;color:var(--muted);margin-top:10px;">Somente as gestoras editam.</div>'}
+    </div>`;
+  col.appendChild(wrap);
+}
+async function salvarRegimeImport(){
+  if(!isGestora()){toast('Sem permissão — só gestora edita o regime','#dc2626');return;}
+  const ficha=getFicha(empresaAtual);
+  const _reg=document.getElementById('f-regime'); if(_reg) ficha.regime=_reg.value||'Simples Nacional';
+  const _per=document.getElementById('f-periodo'); if(_per) ficha.periodo=_per.value||'Mensal';
+  ficha.importacoes=[...document.querySelectorAll('.imp-chk:checked')].map(c=>c.value);
+  ficha.importacao=ficha.importacoes.join(', ');
+  const _io=document.getElementById('f-importacaoObs'); if(_io) ficha.importacaoObs=_io.value||'';
+  // Se há linha do tempo de tributação, o segmento ATUAL (último) acompanha o regime
+  if(ficha.regimeHist&&ficha.regimeHist.length){ ficha.regimeHist[ficha.regimeHist.length-1].regime=ficha.regime; }
+  fichas[empresaAtual]=ficha;
+  await saveFichas();
+  toast('✓ Regime / Importação salvo!');
 }
 
 function atualizarAnexo(){
@@ -3102,19 +3137,23 @@ async function salvarFicha(){
   ficha.respFiscal=document.getElementById('f-respFiscal')?.value||'';
   ficha.respContabil=document.getElementById('f-respContabil')?.value||'';
   ficha.gestora=document.getElementById('f-gestora')?.value||'';
-  ficha.importacoes=[...document.querySelectorAll('.imp-chk:checked')].map(c=>c.value);
-  ficha.importacao=ficha.importacoes.join(', '); // compat: mantém o campo texto
-  ficha.importacaoObs=document.getElementById('f-importacaoObs')?.value||'';
-  ficha.regime=document.getElementById('f-regime')?.value||'Simples Nacional';
-  // Os anexos agora vêm da lista de CNAEs (derivados p/ compat com relatórios)
+  // Regime e Importação migraram para a aba "Regime / Importação" (setor).
+  // Aqui só gravamos o que ESTÁ na tela; se o campo não existe, PRESERVA o valor atual.
+  const _reg=document.getElementById('f-regime'); if(_reg) ficha.regime=_reg.value||'Simples Nacional';
+  const _per=document.getElementById('f-periodo'); if(_per) ficha.periodo=_per.value||'Mensal';
+  if(document.getElementById('f-importacaoObs')){
+    ficha.importacoes=[...document.querySelectorAll('.imp-chk:checked')].map(c=>c.value);
+    ficha.importacao=ficha.importacoes.join(', '); // compat: mantém o campo texto
+    ficha.importacaoObs=document.getElementById('f-importacaoObs').value||'';
+  }
+  // Os anexos vêm da lista de CNAEs (que fica nesta ficha) — derivados p/ compat com relatórios
   _cnaeDerivaAnexos(ficha);
   const _anexosChk=(ficha.anexos||[]).slice();
-  // Se ha linha do tempo de tributacao, o campo Regime edita o segmento ATUAL (ultimo)
+  // Se ha linha do tempo de tributacao, o segmento ATUAL (ultimo) acompanha regime+anexos
   if(ficha.regimeHist&&ficha.regimeHist.length){
     const ult=ficha.regimeHist[ficha.regimeHist.length-1];
     ult.regime=ficha.regime; ult.anexos=_anexosChk.slice();
   }
-  ficha.periodo=document.getElementById('f-periodo')?.value||'Mensal';
   // Salvar contatos dos inputs ativos
   const ficha2=getFicha(empresaAtual);
   ficha.contatos=ficha2.contatos||[];
