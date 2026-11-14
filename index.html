@@ -2667,11 +2667,11 @@ function renderFicha(col){
           <div class="obs-item" id="obs-${o.id}" style="flex-direction:column;align-items:stretch;">
             <div style="display:flex;align-items:flex-start;gap:6px;">
               <div class="obs-texto" style="flex:1;white-space:pre-wrap;">${_escP(o.texto)}</div>
-              <button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar imagem">📷</button>
+              ${isGestora()?`<button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar imagem">📷</button>
               <button class="obs-del" onclick="editarObs('${o.id}')" title="Editar">✎</button>
-              <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>
+              <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>`:''}
             </div>
-            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" loading="lazy" style="max-width:150px;max-height:150px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/><button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="removerImgObs('${o.id}',${ix})" title="Remover imagem">✕</button></span>`).join('')}</div>`:''}
+            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" loading="lazy" style="max-width:150px;max-height:150px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/>${isGestora()?`<button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="removerImgObs('${o.id}',${ix})" title="Remover imagem">✕</button>`:''}</span>`).join('')}</div>`:''}
           </div>`).join('')}
       </div>
       <div class="obs-add-row">
@@ -3007,6 +3007,7 @@ async function anexarImgNova(input){
   catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar imagem (o espaço de imagens já foi criado no Supabase?)','#dc2626'); }
 }
 async function anexarImgObs(obsId){
+  if(!isGestora()){toast('Sem permissão — só gestora altera observação','#dc2626');return;}
   const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
   inp.onchange=async()=>{
     const f=inp.files&&inp.files[0]; if(!f)return;
@@ -3020,11 +3021,13 @@ async function anexarImgObs(obsId){
   inp.click();
 }
 async function removerImgObs(obsId,ix){
+  if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
   const ficha=getFicha(empresaAtual); const o=(ficha.obs||[]).find(x=>x.id===obsId);
   if(o&&o.imagens){ o.imagens.splice(ix,1); fichas[empresaAtual]=ficha; await saveFichas(); renderTarefas(); toast('Imagem removida'); }
 }
 
 async function deletarObs(obsId){
+  if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
   ficha.obs=(ficha.obs||[]).filter(o=>o.id!==obsId);
   fichas[empresaAtual]=ficha;
@@ -3033,6 +3036,7 @@ async function deletarObs(obsId){
   toast('Observação removida');
 }
 async function editarObs(obsId){
+  if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
   const o=(ficha.obs||[]).find(x=>x.id===obsId);
   if(!o)return;
