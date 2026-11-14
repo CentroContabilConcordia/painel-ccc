@@ -2529,8 +2529,27 @@ function renderContatosHTML(contatos, podeEditar, ro) {
   }).join('');
 }
 
+// Quadro Societário: sócios vindos da Receita (BrasilAPI) + capital social. % é manual (não é público).
+function renderSociosHTML(socios, podeEditar, ro) {
+  if(!socios || socios.length === 0) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">Nenhum sócio cadastrado.</div>';
+  return socios.map((s, i) => {
+    const delBtn = podeEditar ? '<button class="contato-del-btn" onclick="removerSocio(' + i + ')">✕ Remover sócio</button>' : '';
+    const sep = i > 0 ? '<hr style="border:none;border-top:1px solid var(--border);margin:10px 0;">' : '';
+    return sep +
+      '<div class="contato-item" id="socio-' + i + '">' +
+        '<div class="contato-grid">' +
+          '<div class="ficha-campo"><div class="ficha-label">Nome do sócio</div><input class="ficha-input" value="' + _escAttrP(s.nome||'') + '" ' + ro + ' onchange="atualizarSocio(' + i + ',\'nome\',this.value)"/></div>' +
+          '<div class="ficha-campo"><div class="ficha-label">Qualificação</div><input class="ficha-input" value="' + _escAttrP(s.qualificacao||'') + '" placeholder="Ex: Sócio-Administrador" ' + ro + ' onchange="atualizarSocio(' + i + ',\'qualificacao\',this.value)"/></div>' +
+          '<div class="ficha-campo"><div class="ficha-label">Entrada</div><input class="ficha-input" type="date" value="' + _escAttrP(s.desde||'') + '" ' + ro + ' onchange="atualizarSocio(' + i + ',\'desde\',this.value)"/></div>' +
+          '<div class="ficha-campo"><div class="ficha-label">% (opcional)</div><input class="ficha-input" value="' + _escAttrP(s.pct||'') + '" placeholder="—" ' + ro + ' onchange="atualizarSocio(' + i + ',\'pct\',this.value)"/></div>' +
+        '</div>' +
+        delBtn +
+      '</div>';
+  }).join('');
+}
+
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',obs:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',capitalSocial:'',socios:[],obs:[]};
 }
 // ── Histórico de tributação (mudança de regime durante o ano) ──
 // Cada segmento: {regime, desde:'AAAA-MM' (''=desde sempre), anexos:[]}
@@ -2627,6 +2646,16 @@ function renderFicha(col){
         ${renderContatosHTML(ficha.contatos||[], podeEditar, ro)}
       </div>
       ${podeEditar?`<button class="contato-add-btn" onclick="adicionarContato()">+ Adicionar contato</button>`:''}
+    </div>
+
+    <div class="ficha-section">
+      <div class="ficha-section-titulo">Quadro Societário</div>
+      <div class="ficha-grid">
+        <div class="ficha-campo"><div class="ficha-label">Capital Social</div><input class="ficha-input" id="f-capitalSocial" value="${_escAttrP(ficha.capitalSocial||'')}" placeholder="Ex: 10.000,00" ${ro}/></div>
+      </div>
+      <div class="ficha-label" style="margin-top:12px;margin-bottom:6px;">Sócios <span style="font-weight:400;color:var(--muted);">${podeEditar?'(dados públicos da Receita; o % é preenchido à mão)':'(somente as gestoras editam)'}</span></div>
+      <div id="socios-lista">${renderSociosHTML(ficha.socios||[], podeEditar, ro)}</div>
+      ${podeEditar?`<button class="contato-add-btn" onclick="adicionarSocio()">+ Adicionar sócio</button>`:''}
     </div>
 
     <div class="ficha-section">
@@ -2940,9 +2969,33 @@ async function deletarContato(idx){
   toast('Contato removido');
 }
 
+function adicionarSocio(){
+  if(!isGestora())return;
+  const ficha=getFicha(empresaAtual);
+  if(!ficha.socios)ficha.socios=[];
+  ficha.socios.push({nome:'',qualificacao:'',desde:'',pct:''});
+  fichas[empresaAtual]=ficha;
+  renderTarefas();
+}
+function atualizarSocio(idx,campo,val){
+  const ficha=getFicha(empresaAtual);
+  if(ficha.socios&&ficha.socios[idx])ficha.socios[idx][campo]=val;
+  fichas[empresaAtual]=ficha;
+}
+async function removerSocio(idx){
+  if(!isGestora())return;
+  const ficha=getFicha(empresaAtual);
+  ficha.socios=(ficha.socios||[]).filter((_,i)=>i!==idx);
+  fichas[empresaAtual]=ficha;
+  await saveFichas();
+  renderTarefas();
+  toast('Sócio removido');
+}
+
 async function salvarFicha(){
   if(!isGestora()){toast('Sem permissão','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
+  ficha.capitalSocial=document.getElementById('f-capitalSocial')?.value||'';
   ficha.codigoQuestor=(document.getElementById('f-codquestor')?.value||'').trim();
   ficha.cnpj=document.getElementById('f-cnpj')?.value||'';
   ficha.abertura=document.getElementById('f-abertura')?.value||'';
@@ -2976,6 +3029,7 @@ async function salvarFicha(){
   // Salvar contatos dos inputs ativos
   const ficha2=getFicha(empresaAtual);
   ficha.contatos=ficha2.contatos||[];
+  ficha.socios=ficha2.socios||[];
   fichas[empresaAtual]=ficha;
   await saveFichas();
   toast('✓ Ficha salva!');
