@@ -1678,13 +1678,22 @@ function renderTarefas(){
   // ABAS (no setor: Tarefas + Bancos + Regime/Importação; a Ficha cadastral e os CNAEs ficam na aba central)
   const tabs=document.createElement('div');tabs.className='emp-tabs';
   tabs.innerHTML=`
-    <div class="emp-tab ${abaEmpresa!=='bancos'&&abaEmpresa!=='regime'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
+    <div class="emp-tab ${abaEmpresa!=='bancos'&&abaEmpresa!=='regime'&&abaEmpresa!=='obs'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
     <div class="emp-tab ${abaEmpresa==='bancos'?'active':''}" onclick="trocarAbaEmpresa('bancos')">🏦 Bancos</div>
-    <div class="emp-tab ${abaEmpresa==='regime'?'active':''}" onclick="trocarAbaEmpresa('regime')">🧾 Regime / Importação</div>`;
+    <div class="emp-tab ${abaEmpresa==='regime'?'active':''}" onclick="trocarAbaEmpresa('regime')">🧾 Regime / Importação</div>
+    <div class="emp-tab ${abaEmpresa==='obs'?'active':''}" onclick="trocarAbaEmpresa('obs')">📝 Observações</div>`;
   col.appendChild(tabs);
 
   if(abaEmpresa==='bancos'){renderBancos(col);return;}
   if(abaEmpresa==='regime'){renderRegimeImport(col);return;}
+  if(abaEmpresa==='obs'){
+    const _fo=getFicha(empresaAtual);
+    const _ob=document.createElement('div');_ob.className='ficha-wrap';
+    _ob.innerHTML=obsBlocoHTML(_fo, setorAtual==='contabil'?'Observação do Contábil':'Observação do Fiscal');
+    col.appendChild(_ob);
+    renderObsNovaImgs();
+    return;
+  }
   if(verHistorico){renderHistorico(col,cor);return;}
 
   // Selo do regime vigente no mês (só quando a empresa teve mudança de tributação)
@@ -1754,13 +1763,6 @@ function renderTarefas(){
     wrap.appendChild(ar);
   }
   col.appendChild(wrap);
-
-  // Observação própria do setor (Fiscal ou Contábil). Equipe inclui; só gestora altera/exclui.
-  const _fObs=getFicha(empresaAtual);
-  const _obsBox=document.createElement('div');_obsBox.style='margin-top:14px;';
-  _obsBox.innerHTML=obsBlocoHTML(_fObs, setorAtual==='contabil'?'Observação do Contábil':'Observação do Fiscal');
-  col.appendChild(_obsBox);
-  renderObsNovaImgs();
 }
 
 function toggleMostrarNA(){ mostrarNA=!mostrarNA; renderTarefas(); }
