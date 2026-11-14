@@ -2541,7 +2541,8 @@ function renderSociosHTML(socios, podeEditar, ro) {
           '<div class="ficha-campo"><div class="ficha-label">Nome do sócio</div><input class="ficha-input" value="' + _escAttrP(s.nome||'') + '" ' + ro + ' onchange="atualizarSocio(' + i + ',\'nome\',this.value)"/></div>' +
           '<div class="ficha-campo"><div class="ficha-label">Qualificação</div><input class="ficha-input" value="' + _escAttrP(s.qualificacao||'') + '" placeholder="Ex: Sócio-Administrador" ' + ro + ' onchange="atualizarSocio(' + i + ',\'qualificacao\',this.value)"/></div>' +
           '<div class="ficha-campo"><div class="ficha-label">Entrada</div><input class="ficha-input" type="date" value="' + _escAttrP(s.desde||'') + '" ' + ro + ' onchange="atualizarSocio(' + i + ',\'desde\',this.value)"/></div>' +
-          '<div class="ficha-campo"><div class="ficha-label">% (opcional)</div><input class="ficha-input" value="' + _escAttrP(s.pct||'') + '" placeholder="—" ' + ro + ' onchange="atualizarSocio(' + i + ',\'pct\',this.value)"/></div>' +
+          '<div class="ficha-campo"><div class="ficha-label">CPF (manual)</div><input class="ficha-input" value="' + _escAttrP(s.cpf||'') + '" placeholder="000.000.000-00" ' + ro + ' onchange="atualizarSocio(' + i + ',\'cpf\',this.value)"/></div>' +
+          '<div class="ficha-campo"><div class="ficha-label">% do capital (manual)</div><input class="ficha-input" value="' + _escAttrP(s.pct||'') + '" placeholder="—" ' + ro + ' onchange="atualizarSocio(' + i + ',\'pct\',this.value)"/></div>' +
         '</div>' +
         delBtn +
       '</div>';
@@ -2973,7 +2974,7 @@ function adicionarSocio(){
   if(!isGestora())return;
   const ficha=getFicha(empresaAtual);
   if(!ficha.socios)ficha.socios=[];
-  ficha.socios.push({nome:'',qualificacao:'',desde:'',pct:''});
+  ficha.socios.push({nome:'',qualificacao:'',desde:'',cpf:'',pct:''});
   fichas[empresaAtual]=ficha;
   renderTarefas();
 }
