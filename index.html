@@ -2527,7 +2527,7 @@ function trocarAbaEmpresa(aba){
 function renderFichaCentral(){
   const col=document.getElementById('col-tarefas');col.innerHTML='';
   const hdr=document.createElement('div');hdr.className='emp-header';
-  hdr.innerHTML=`<div class="eh-nome" title="${empresaAtual}">${empresaAtual}</div><div class="eh-right"><span style="font-size:12px;color:var(--muted);">📋 Tarefas e 🏦 Bancos ficam nos setores Fiscal/Contábil</span></div>`;
+  hdr.innerHTML=`<div class="eh-nome" title="${empresaAtual}">${empresaAtual}</div>`;
   col.appendChild(hdr);
   renderFicha(col);
 }
