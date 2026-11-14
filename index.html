@@ -2529,12 +2529,29 @@ function renderContatosHTML(contatos, podeEditar, ro) {
   }).join('');
 }
 
-// Quadro Societário: sócios vindos da Receita (BrasilAPI) + capital social. % é manual (não é público).
-function renderSociosHTML(socios, podeEditar, ro) {
-  if(!socios || socios.length === 0) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">Nenhum sócio cadastrado.</div>';
+// Quadro Societário: sócios (Receita/BrasilAPI) + capital social. CPF é manual (não é público).
+// O % é CALCULADO automaticamente: capital do sócio ÷ capital social total (1 sócio = 100%).
+function _parseBRLNum(s){ if(s==null)return NaN; s=String(s).replace(/[^\d.,-]/g,'').trim(); if(!s)return NaN;
+  if(s.indexOf(',')>=0){ s=s.replace(/\./g,'').replace(',','.'); } // pt-BR: '.' milhar, ',' decimal
+  const n=parseFloat(s); return isNaN(n)?NaN:n; }
+function _fmtBRLNum(n){ const p=(Math.round(n*100)/100).toFixed(2).split('.'); return p[0].replace(/\B(?=(\d{3})+(?!\d))/g,'.')+','+p[1]; }
+function _fmtPctNum(n){ return (Math.round(n*100)/100).toFixed(2).replace('.',','); }
+function _socioPct(ficha,i){ const soc=ficha.socios||[]; if(soc.length===1)return 100;
+  const total=_parseBRLNum(ficha.capitalSocial); const cap=_parseBRLNum((soc[i]||{}).capital);
+  if(!(total>0)||!isFinite(cap))return null; return cap/total*100; }
+function _sociosSomaHTML(ficha){ const soc=ficha.socios||[]; if(soc.length<2)return '';
+  const total=_parseBRLNum(ficha.capitalSocial); let soma=0,tem=false;
+  soc.forEach(s=>{ const c=_parseBRLNum(s.capital); if(isFinite(c)){soma+=c;tem=true;} });
+  if(!tem)return '<div style="font-size:12px;margin-top:8px;color:var(--muted);">Preencha o capital de cada sócio p/ o % ser calculado.</div>';
+  const bate=total>0&&Math.abs(soma-total)<0.01;
+  return '<div style="font-size:12px;margin-top:8px;color:var(--muted);">Soma dos sócios: <b>R$ '+_fmtBRLNum(soma)+'</b> · Capital social: <b>R$ '+(total>0?_fmtBRLNum(total):'—')+'</b> '+(bate?'<span style="color:var(--green);font-weight:700;">✓ fecha 100%</span>':'<span style="color:#d97706;font-weight:700;">⚠ não bate com o capital social</span>')+'</div>'; }
+function renderSociosHTML(ficha, podeEditar, ro) {
+  const socios = ficha.socios||[];
+  if(socios.length === 0) return '<div style="font-size:12px;color:var(--muted);padding:6px 0;">Nenhum sócio cadastrado.</div>';
   return socios.map((s, i) => {
     const delBtn = podeEditar ? '<button class="contato-del-btn" onclick="removerSocio(' + i + ')">✕ Remover sócio</button>' : '';
     const sep = i > 0 ? '<hr style="border:none;border-top:1px solid var(--border);margin:10px 0;">' : '';
+    const _p=_socioPct(ficha,i); const pctTxt=(_p==null?'':_fmtPctNum(_p)+'%');
     return sep +
       '<div class="contato-item" id="socio-' + i + '">' +
         '<div class="contato-grid">' +
@@ -2542,11 +2559,28 @@ function renderSociosHTML(socios, podeEditar, ro) {
           '<div class="ficha-campo"><div class="ficha-label">Qualificação</div><input class="ficha-input" value="' + _escAttrP(s.qualificacao||'') + '" placeholder="Ex: Sócio-Administrador" ' + ro + ' onchange="atualizarSocio(' + i + ',\'qualificacao\',this.value)"/></div>' +
           '<div class="ficha-campo"><div class="ficha-label">Entrada</div><input class="ficha-input" type="date" value="' + _escAttrP(s.desde||'') + '" ' + ro + ' onchange="atualizarSocio(' + i + ',\'desde\',this.value)"/></div>' +
           '<div class="ficha-campo"><div class="ficha-label">CPF (manual)</div><input class="ficha-input" value="' + _escAttrP(s.cpf||'') + '" placeholder="000.000.000-00" ' + ro + ' onchange="atualizarSocio(' + i + ',\'cpf\',this.value)"/></div>' +
-          '<div class="ficha-campo"><div class="ficha-label">% do capital (manual)</div><input class="ficha-input" value="' + _escAttrP(s.pct||'') + '" placeholder="—" ' + ro + ' onchange="atualizarSocio(' + i + ',\'pct\',this.value)"/></div>' +
+          '<div class="ficha-campo"><div class="ficha-label">Capital do sócio (R$)</div><input class="ficha-input" value="' + _escAttrP(s.capital||'') + '" placeholder="Ex: 5.000,00" ' + ro + ' onchange="atualizarSocioCapital(' + i + ',this.value)"/></div>' +
+          '<div class="ficha-campo"><div class="ficha-label">% do capital <span style="font-weight:400;color:var(--muted);">(auto)</span></div><input class="ficha-input" value="' + pctTxt + '" readonly tabindex="-1" style="background:var(--surface3);" title="Calculado: capital do sócio ÷ capital social"/></div>' +
         '</div>' +
         delBtn +
       '</div>';
   }).join('');
+}
+function atualizarSocioCapital(idx,val){
+  const ficha=getFicha(empresaAtual);
+  if(ficha.socios&&ficha.socios[idx]){ ficha.socios[idx].capital=val;
+    ficha.socios.forEach((s,i)=>{ const p=_socioPct(ficha,i); s.pct=(p==null?'':_fmtPctNum(p)); }); }
+  fichas[empresaAtual]=ficha; _rerenderSocios();
+}
+function _capitalSocialMudou(val){
+  const ficha=getFicha(empresaAtual); ficha.capitalSocial=val; ficha.socios=ficha.socios||[];
+  ficha.socios.forEach((s,i)=>{ const p=_socioPct(ficha,i); s.pct=(p==null?'':_fmtPctNum(p)); });
+  fichas[empresaAtual]=ficha; _rerenderSocios();
+}
+function _rerenderSocios(){
+  const ficha=getFicha(empresaAtual); const ge=isGestora(); const ro=ge?'':'readonly';
+  const el=document.getElementById('socios-lista'); if(el) el.innerHTML=renderSociosHTML(ficha, ge, ro);
+  const sl=document.getElementById('socios-soma'); if(sl) sl.innerHTML=_sociosSomaHTML(ficha);
 }
 
 function getFicha(emp){
@@ -2652,10 +2686,11 @@ function renderFicha(col){
     <div class="ficha-section">
       <div class="ficha-section-titulo">Quadro Societário</div>
       <div class="ficha-grid">
-        <div class="ficha-campo"><div class="ficha-label">Capital Social</div><input class="ficha-input" id="f-capitalSocial" value="${_escAttrP(ficha.capitalSocial||'')}" placeholder="Ex: 10.000,00" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Capital Social</div><input class="ficha-input" id="f-capitalSocial" value="${_escAttrP(ficha.capitalSocial||'')}" placeholder="Ex: 10.000,00" ${ro} onchange="_capitalSocialMudou(this.value)"/></div>
       </div>
-      <div class="ficha-label" style="margin-top:12px;margin-bottom:6px;">Sócios <span style="font-weight:400;color:var(--muted);">${podeEditar?'(dados públicos da Receita; o % é preenchido à mão)':'(somente as gestoras editam)'}</span></div>
-      <div id="socios-lista">${renderSociosHTML(ficha.socios||[], podeEditar, ro)}</div>
+      <div class="ficha-label" style="margin-top:12px;margin-bottom:6px;">Sócios <span style="font-weight:400;color:var(--muted);">${podeEditar?'(nome/qualificação da Receita; preencha o Capital de cada um → o % é automático)':'(somente as gestoras editam)'}</span></div>
+      <div id="socios-lista">${renderSociosHTML(ficha, podeEditar, ro)}</div>
+      <div id="socios-soma">${_sociosSomaHTML(ficha)}</div>
       ${podeEditar?`<button class="contato-add-btn" onclick="adicionarSocio()">+ Adicionar sócio</button>`:''}
     </div>
 
@@ -2974,7 +3009,7 @@ function adicionarSocio(){
   if(!isGestora())return;
   const ficha=getFicha(empresaAtual);
   if(!ficha.socios)ficha.socios=[];
-  ficha.socios.push({nome:'',qualificacao:'',desde:'',cpf:'',pct:''});
+  ficha.socios.push({nome:'',qualificacao:'',desde:'',cpf:'',capital:'',pct:''});
   fichas[empresaAtual]=ficha;
   renderTarefas();
 }
@@ -3031,6 +3066,7 @@ async function salvarFicha(){
   const ficha2=getFicha(empresaAtual);
   ficha.contatos=ficha2.contatos||[];
   ficha.socios=ficha2.socios||[];
+  ficha.socios.forEach((s,i)=>{ const p=_socioPct(ficha,i); s.pct=(p==null?'':_fmtPctNum(p)); }); // % sempre coerente c/ o capital salvo
   fichas[empresaAtual]=ficha;
   await saveFichas();
   toast('✓ Ficha salva!');
