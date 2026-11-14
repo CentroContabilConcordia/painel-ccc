@@ -1356,9 +1356,9 @@ async function iniciarApp(){
     bca0.onclick=()=>trocarView('contabanual',bca0);nav.appendChild(bca0);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
-    ['monitor','fiscal','contabil','relatorios','admin'].forEach(v=>{
-      const btn=document.createElement('button');btn.className='nav-btn'+(v==='monitor'?' active':'');
-      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
+    ['monitor','fichas','fiscal','contabil','relatorios','admin'].forEach(v=>{
+      const btn=document.createElement('button');btn.className='nav-btn'+(v==='monitor'?' active':'');btn.dataset.view=v;
+      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='fichas'?'🏢 Ficha das Empresas':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
       btn.onclick=()=>trocarView(v,btn);nav.appendChild(btn);
     });
     document.getElementById('btn-add-tarefa').style.display='';
@@ -1374,6 +1374,8 @@ async function iniciarApp(){
       const btn=document.createElement('button');btn.className='nav-btn active';btn.textContent='📚 Setor Contábil';
       btn.onclick=()=>trocarView('contabil',btn);nav.appendChild(btn);
     }
+    const bfi=document.createElement('button');bfi.className='nav-btn';bfi.textContent='🏢 Ficha das Empresas';bfi.dataset.view='fichas';
+    bfi.onclick=()=>trocarView('fichas',bfi);nav.appendChild(bfi);
     document.getElementById('btn-add-tarefa').style.display='none';
   }
   if(!soControle){ // os demais veem também Pendências, Processos e Controle Anual
@@ -1449,7 +1451,7 @@ function trocarView(v,btn){
   document.getElementById('painel-pendencias').style.display=v==='pendencias'?'block':'none';
   document.getElementById('painel-processos').style.display=v==='processos'?'block':'none';
   document.getElementById('painel-contabanual').style.display=v==='contabanual'?'block':'none';
-  document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews?'':'none';
+  document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews&&v!=='fichas'?'':'none';
   if(v==='pendencias'){renderPendencias();return;}
   if(v==='monitor'){initMonitor();return;}
   if(v==='relatorios'){initRelatorios();return;}
@@ -1459,9 +1461,9 @@ function trocarView(v,btn){
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
   const u=USUARIOS[usuarioAtual];
   const colMembros=document.getElementById('col-membros');
-  if(v==='contabil'){
+  if(v==='contabil'||v==='fichas'){
     colMembros.style.display='none';
-    document.getElementById('col2-titulo').textContent=(isGestora()||u.setor==='contabil')?'Todas as Empresas':'Minhas Empresas';
+    document.getElementById('col2-titulo').textContent=v==='fichas'?'Empresas':((isGestora()||u.setor==='contabil')?'Todas as Empresas':'Minhas Empresas');
     document.getElementById('col2-count').textContent=TODAS_EMPRESAS.length+' empresas';
     document.getElementById('emp-busca').value='';empFiltro='';
     renderEmpresasContabil();
@@ -1474,7 +1476,9 @@ function trocarView(v,btn){
       if(m){document.getElementById('col2-titulo').textContent=m.nome;document.getElementById('col2-count').textContent=empresasDoMembro(m.id,mesAtual).length+' empresas';document.getElementById('emp-busca').value='';empFiltro='';renderEmpresasFiscal();}
     } else {renderMembros();document.getElementById('col2-titulo').textContent='Selecione';document.getElementById('col2-count').textContent='';document.getElementById('emp-lista').innerHTML='<div class="vazio" style="padding:22px;">← Selecione uma pessoa</div>';}
   }
-  document.getElementById('col-tarefas').innerHTML='<div class="placeholder"><div class="ico">📋</div><p>Selecione uma empresa<br>para ver as tarefas do mês</p></div>';
+  document.getElementById('col-tarefas').innerHTML=v==='fichas'
+    ?'<div class="placeholder"><div class="ico">🏢</div><p>Selecione uma empresa<br>para ver a ficha cadastral</p></div>'
+    :'<div class="placeholder"><div class="ico">📋</div><p>Selecione uma empresa<br>para ver as tarefas do mês</p></div>';
 }
 
 function renderMembros(){
@@ -1578,8 +1582,10 @@ function buscarEmp(val){
 }
 function toggleMostrarInativas(v){mostrarInativas=v;if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();}
 function selecionarEmpresa(emp){
-  empresaAtual=emp;verHistorico=false;abaEmpresa='ficha';_obsNovaImgs=[];
+  empresaAtual=emp;verHistorico=false;_obsNovaImgs=[];
   if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();
+  if(viewAtual==='fichas'){ abaEmpresa='ficha'; renderFichaCentral(); return; }
+  abaEmpresa='tarefas';
   const mk=getMembroKey();const md=getMesData(setorAtual,mk,emp,mesAtual);
   if(md.tarefas.length===0){
     setMesData(setorAtual,mk,emp,mesAtual,{responsavel:setorAtual==='contabil'&&!isGestora()?usuarioAtual:null,tarefas:novasTarefasMes(setorAtual,mk,emp,mesAtual)});
@@ -1666,18 +1672,16 @@ function renderTarefas(){
   else if(setorAtual==='contabil'&&responsavel)cor=MEMBROS_CONTABIL.find(x=>x.id===responsavel)?.cor||cor;
 
   const hdr=document.createElement('div');hdr.className='emp-header';
-  hdr.innerHTML=`<div class="eh-nome" title="${empresaAtual}">${empresaAtual}</div><div class="eh-right"><div class="mes-nav"><button class="mes-btn" onclick="navMes(-1)">‹</button><div class="mes-atual">${mesLabel(mesAtual)}</div><button class="mes-btn" onclick="navMes(1)">›</button></div><button class="hist-btn ${verHistorico?'active':''}" onclick="toggleHist()">📅 Histórico</button>${isGestora()?`<button class="btn-primary" onclick="abrirModalTarefa()" style="font-size:11px;padding:4px 9px;">+ Tarefa</button>`:''}</div>`;
+  hdr.innerHTML=`<div class="eh-nome" title="${empresaAtual}">${empresaAtual}</div><div class="eh-right"><button class="hist-btn" onclick="abrirFichaEmpresaAtual()" title="Abrir a ficha cadastral desta empresa">🏢 Ficha</button><div class="mes-nav"><button class="mes-btn" onclick="navMes(-1)">‹</button><div class="mes-atual">${mesLabel(mesAtual)}</div><button class="mes-btn" onclick="navMes(1)">›</button></div><button class="hist-btn ${verHistorico?'active':''}" onclick="toggleHist()">📅 Histórico</button>${isGestora()?`<button class="btn-primary" onclick="abrirModalTarefa()" style="font-size:11px;padding:4px 9px;">+ Tarefa</button>`:''}</div>`;
   col.appendChild(hdr);
 
-  // ABAS
+  // ABAS (no setor: Tarefas + Bancos; a Ficha cadastral fica na aba central "Ficha das Empresas")
   const tabs=document.createElement('div');tabs.className='emp-tabs';
   tabs.innerHTML=`
-    <div class="emp-tab ${abaEmpresa==='ficha'?'active':''}" onclick="trocarAbaEmpresa('ficha')">🏢 Ficha da Empresa</div>
-    <div class="emp-tab ${abaEmpresa==='tarefas'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
+    <div class="emp-tab ${abaEmpresa!=='bancos'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
     <div class="emp-tab ${abaEmpresa==='bancos'?'active':''}" onclick="trocarAbaEmpresa('bancos')">🏦 Bancos</div>`;
   col.appendChild(tabs);
 
-  if(abaEmpresa==='ficha'){renderFicha(col);return;}
   if(abaEmpresa==='bancos'){renderBancos(col);return;}
   if(verHistorico){renderHistorico(col,cor);return;}
 
@@ -1748,6 +1752,13 @@ function renderTarefas(){
     wrap.appendChild(ar);
   }
   col.appendChild(wrap);
+
+  // Observação própria do setor (Fiscal ou Contábil). Equipe inclui; só gestora altera/exclui.
+  const _fObs=getFicha(empresaAtual);
+  const _obsBox=document.createElement('div');_obsBox.style='margin-top:14px;';
+  _obsBox.innerHTML=obsBlocoHTML(_fObs, setorAtual==='contabil'?'Observação do Contábil':'Observação do Fiscal');
+  col.appendChild(_obsBox);
+  renderObsNovaImgs();
 }
 
 function toggleMostrarNA(){ mostrarNA=!mostrarNA; renderTarefas(); }
@@ -2507,8 +2518,24 @@ document.addEventListener('DOMContentLoaded',()=>{
 function trocarAbaEmpresa(aba){
   abaEmpresa=aba;
   verHistorico=false;
+  if(viewAtual==='fichas'){ renderFichaCentral(); return; }
   renderTarefas();
 }
+// Aba central "Ficha das Empresas": dados cadastrais + bancos + observações gerais
+function renderFichaCentral(){
+  const col=document.getElementById('col-tarefas');col.innerHTML='';
+  const hdr=document.createElement('div');hdr.className='emp-header';
+  hdr.innerHTML=`<div class="eh-nome" title="${empresaAtual}">${empresaAtual}</div><div class="eh-right"><span style="font-size:12px;color:var(--muted);">📋 Tarefas e 🏦 Bancos ficam nos setores Fiscal/Contábil</span></div>`;
+  col.appendChild(hdr);
+  renderFicha(col);
+}
+// Atalho do setor Fiscal/Contábil -> abre a Ficha da empresa aberta
+function abrirFichaDaEmpresa(emp){
+  const b=document.querySelector('.nav-btn[data-view="fichas"]');
+  trocarView('fichas',b);
+  selecionarEmpresa(emp);
+}
+function abrirFichaEmpresaAtual(){ if(empresaAtual)abrirFichaDaEmpresa(empresaAtual); }
 
 // ═══ FICHA DA EMPRESA ═══
 function renderContatosHTML(contatos, podeEditar, ro) {
@@ -2584,7 +2611,7 @@ function _rerenderSocios(){
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',capitalSocial:'',socios:[],obs:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',capitalSocial:'',socios:[],obs:[],obsFiscal:[],obsContabil:[],obsGeral:[]};
 }
 // ── Histórico de tributação (mudança de regime durante o ano) ──
 // Cada segmento: {regime, desde:'AAAA-MM' (''=desde sempre), anexos:[]}
@@ -2617,8 +2644,56 @@ async function toggleAtivaEmpresa(){
   fichas[empresaAtual]=ficha;
   await saveFichas();
   if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();
-  renderTarefas();
+  _reRenderObsHost();
   toast(ativa?'Empresa marcada como INATIVA':'Empresa REATIVADA');
+}
+
+// ── Observações por CONTEXTO ──────────────────────────────────────────
+// Ficha das Empresas (aba central) -> observação GERAL (começa vazia)
+// Setor Fiscal  -> ficha.obsFiscal   | Setor Contábil -> ficha.obsContabil
+// As observações antigas (ficha.obs, lista única compartilhada) são a
+// "semente": na 1ª vez que um setor é aberto, ele recebe uma CÓPIA delas.
+function _obsProp(){
+  if(viewAtual==='fichas') return 'obsGeral';
+  if(setorAtual==='contabil') return 'obsContabil';
+  return 'obsFiscal';
+}
+function _obsList(ficha){
+  const k=_obsProp();
+  if(!Array.isArray(ficha[k])){
+    if((k==='obsFiscal'||k==='obsContabil') && Array.isArray(ficha.obs) && ficha.obs.length)
+      ficha[k]=ficha.obs.map(o=>({id:o.id,texto:o.texto,imagens:(o.imagens||[]).slice()}));
+    else ficha[k]=[];
+  }
+  return ficha[k];
+}
+function _reRenderObsHost(){ if(viewAtual==='fichas') renderFichaCentral(); else renderTarefas(); }
+function obsBlocoHTML(ficha, titulo){
+  const lista=_obsList(ficha);
+  return `
+    <div class="ficha-section">
+      <div class="ficha-section-titulo">${titulo}</div>
+      <div class="obs-lista" id="obs-lista">
+        ${lista.map(o=>`
+          <div class="obs-item" id="obs-${o.id}" style="flex-direction:column;align-items:stretch;">
+            <div style="display:flex;align-items:flex-start;gap:6px;">
+              <div class="obs-texto" style="flex:1;white-space:pre-wrap;">${_escP(o.texto)}</div>
+              ${isGestora()?`<button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar imagem">📷</button>
+              <button class="obs-del" onclick="editarObs('${o.id}')" title="Editar">✎</button>
+              <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>`:''}
+            </div>
+            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" loading="lazy" style="max-width:150px;max-height:150px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/>${isGestora()?`<button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="removerImgObs('${o.id}',${ix})" title="Remover imagem">✕</button>`:''}</span>`).join('')}</div>`:''}
+          </div>`).join('')}
+      </div>
+      <div class="obs-add-row">
+        <textarea class="obs-add-inp" id="obs-nova" placeholder="Adicionar observação, particularidade ou alerta..."></textarea>
+        <button class="obs-add-btn" onclick="adicionarObs()">Adicionar</button>
+      </div>
+      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label class="tfiltro-btn" style="cursor:pointer;">📷 Anexar imagem à próxima observação<input type="file" accept="image/*" style="display:none" onchange="anexarImgNova(this)"/></label>
+        <span id="obs-nova-imgs" style="display:flex;flex-wrap:wrap;gap:6px;"></span>
+      </div>
+    </div>`;
 }
 
 function renderFicha(col){
@@ -2725,29 +2800,7 @@ function renderFicha(col){
       </div>
     </div>
 
-    <div class="ficha-section">
-      <div class="ficha-section-titulo">Observações e Particularidades</div>
-      <div class="obs-lista" id="obs-lista">
-        ${(ficha.obs||[]).map(o=>`
-          <div class="obs-item" id="obs-${o.id}" style="flex-direction:column;align-items:stretch;">
-            <div style="display:flex;align-items:flex-start;gap:6px;">
-              <div class="obs-texto" style="flex:1;white-space:pre-wrap;">${_escP(o.texto)}</div>
-              ${isGestora()?`<button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar imagem">📷</button>
-              <button class="obs-del" onclick="editarObs('${o.id}')" title="Editar">✎</button>
-              <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>`:''}
-            </div>
-            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" loading="lazy" style="max-width:150px;max-height:150px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/>${isGestora()?`<button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="removerImgObs('${o.id}',${ix})" title="Remover imagem">✕</button>`:''}</span>`).join('')}</div>`:''}
-          </div>`).join('')}
-      </div>
-      <div class="obs-add-row">
-        <textarea class="obs-add-inp" id="obs-nova" placeholder="Adicionar observação, particularidade ou alerta..."></textarea>
-        <button class="obs-add-btn" onclick="adicionarObs()">Adicionar</button>
-      </div>
-      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <label class="tfiltro-btn" style="cursor:pointer;">📷 Anexar imagem à próxima observação<input type="file" accept="image/*" style="display:none" onchange="anexarImgNova(this)"/></label>
-        <span id="obs-nova-imgs" style="display:flex;flex-wrap:wrap;gap:6px;"></span>
-      </div>
-    </div>
+    ${obsBlocoHTML(ficha,'Observações Gerais da Empresa')}
 
     ${podeEditar?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
       <button class="ficha-save-btn" onclick="salvarFicha()">💾 Salvar Ficha</button>
@@ -2959,7 +3012,7 @@ async function confirmarMudancaRegime(){
   fichas[empresaAtual]=ficha;
   await saveFichas();
   fecharModalRegime();
-  renderTarefas();
+  _reRenderObsHost();
   toast('✓ Mudança de tributação registrada!');
 }
 async function excluirMudancaRegime(desde){
@@ -2976,7 +3029,7 @@ async function excluirMudancaRegime(desde){
   if(ult){ficha.regime=ult.regime;ficha.anexos=(ult.anexos||[]).slice();ficha.anexo=(ult.anexos||[]).join(', ');}
   fichas[empresaAtual]=ficha;
   await saveFichas();
-  renderTarefas();
+  _reRenderObsHost();
   toast('Mudança removida');
 }
 
@@ -2986,7 +3039,7 @@ function adicionarContato(){
   if(!ficha.contatos)ficha.contatos=[];
   ficha.contatos.push({nome:'',cargo:'',telefone:'',email:''});
   fichas[empresaAtual]=ficha;
-  renderTarefas();
+  _reRenderObsHost();
 }
 
 function atualizarContato(idx,campo,val){
@@ -3001,7 +3054,7 @@ async function deletarContato(idx){
   ficha.contatos=(ficha.contatos||[]).filter((_,i)=>i!==idx);
   fichas[empresaAtual]=ficha;
   await saveFichas();
-  renderTarefas();
+  _reRenderObsHost();
   toast('Contato removido');
 }
 
@@ -3011,7 +3064,7 @@ function adicionarSocio(){
   if(!ficha.socios)ficha.socios=[];
   ficha.socios.push({nome:'',qualificacao:'',desde:'',cpf:'',capital:'',pct:''});
   fichas[empresaAtual]=ficha;
-  renderTarefas();
+  _reRenderObsHost();
 }
 function atualizarSocio(idx,campo,val){
   const ficha=getFicha(empresaAtual);
@@ -3024,7 +3077,7 @@ async function removerSocio(idx){
   ficha.socios=(ficha.socios||[]).filter((_,i)=>i!==idx);
   fichas[empresaAtual]=ficha;
   await saveFichas();
-  renderTarefas();
+  _reRenderObsHost();
   toast('Sócio removido');
 }
 
@@ -3077,14 +3130,14 @@ async function adicionarObs(){
   const texto=(inp?.value||'').trim();
   if(!texto && !_obsNovaImgs.length)return;
   const ficha=getFicha(empresaAtual);
-  if(!ficha.obs)ficha.obs=[];
+  const lista=_obsList(ficha);
   const id='obs_'+Date.now();
-  ficha.obs.push({id,texto:texto||'',imagens:_obsNovaImgs.slice()});
+  lista.push({id,texto:texto||'',imagens:_obsNovaImgs.slice()});
   _obsNovaImgs=[];
   fichas[empresaAtual]=ficha;
   await saveFichas();
   if(inp)inp.value='';
-  renderTarefas();
+  _reRenderObsHost();
   toast('✓ Observação adicionada!');
 }
 function renderObsNovaImgs(){
@@ -3105,31 +3158,31 @@ async function anexarImgObs(obsId){
     toast('Enviando imagem...');
     try{
       const url=await uploadImagem(f,'obs');
-      const ficha=getFicha(empresaAtual); const o=(ficha.obs||[]).find(x=>x.id===obsId);
-      if(o){ if(!o.imagens)o.imagens=[]; o.imagens.push(url); fichas[empresaAtual]=ficha; await saveFichas(); renderTarefas(); toast('✓ Imagem anexada!'); }
+      const ficha=getFicha(empresaAtual); const o=_obsList(ficha).find(x=>x.id===obsId);
+      if(o){ if(!o.imagens)o.imagens=[]; o.imagens.push(url); fichas[empresaAtual]=ficha; await saveFichas(); _reRenderObsHost(); toast('✓ Imagem anexada!'); }
     }catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar imagem','#dc2626'); }
   };
   inp.click();
 }
 async function removerImgObs(obsId,ix){
   if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
-  const ficha=getFicha(empresaAtual); const o=(ficha.obs||[]).find(x=>x.id===obsId);
-  if(o&&o.imagens){ o.imagens.splice(ix,1); fichas[empresaAtual]=ficha; await saveFichas(); renderTarefas(); toast('Imagem removida'); }
+  const ficha=getFicha(empresaAtual); const o=_obsList(ficha).find(x=>x.id===obsId);
+  if(o&&o.imagens){ o.imagens.splice(ix,1); fichas[empresaAtual]=ficha; await saveFichas(); _reRenderObsHost(); toast('Imagem removida'); }
 }
 
 async function deletarObs(obsId){
   if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
-  ficha.obs=(ficha.obs||[]).filter(o=>o.id!==obsId);
+  ficha[_obsProp()]=_obsList(ficha).filter(o=>o.id!==obsId);
   fichas[empresaAtual]=ficha;
   await saveFichas();
-  renderTarefas();
+  _reRenderObsHost();
   toast('Observação removida');
 }
 async function editarObs(obsId){
   if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
-  const o=(ficha.obs||[]).find(x=>x.id===obsId);
+  const o=_obsList(ficha).find(x=>x.id===obsId);
   if(!o)return;
   const novo=prompt('Editar observação:', o.texto);
   if(novo===null)return;            // cancelou
@@ -3138,7 +3191,7 @@ async function editarObs(obsId){
   o.texto=txt;
   fichas[empresaAtual]=ficha;
   await saveFichas();
-  renderTarefas();
+  _reRenderObsHost();
   toast('✓ Observação atualizada');
 }
 
