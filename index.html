@@ -3091,7 +3091,7 @@ function renderBancos(col){
             <option value="naoenviou"${st==='naoenviou'?' selected':''}>❌ Não enviou</option>
             <option value="naoseaplica"${st==='naoseaplica'?' selected':''}>— N/A</option>
           </select>
-          ${podeEditar?`<button class="banco-del" onclick="editarBanco('${b.id}')" title="Editar">✎</button><button class="banco-del" onclick="deletarBanco('${b.id}')" title="Remover">✕</button>`:''}
+          ${podeEditar?`<button class="banco-del" onclick="editarBanco('${b.id}')" title="Editar">✎</button>${isGestora()?`<button class="banco-del" onclick="deletarBanco('${b.id}')" title="Remover">✕</button>`:''}`:''}
         </div>`;
     });
     bancosHtml+='</div>';
@@ -3140,6 +3140,7 @@ async function adicionarBanco(){
 }
 
 async function deletarBanco(bid){
+  if(!isGestora()){toast('Sem permissão — só gestora exclui banco','#dc2626');return;}
   bancosCad[empresaAtual]=(bancosCad[empresaAtual]||[]).filter(b=>b.id!==bid);
   await saveBancos();
   renderTarefas();
