@@ -448,7 +448,10 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
         <div class="col2-count" id="col2-count"></div>
       </div>
       <div class="emp-search-wrap"><input id="emp-busca" placeholder="Buscar empresa..." oninput="buscarEmp(this.value)" autocomplete="off"/>
-        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);margin-top:5px;cursor:pointer;"><input type="checkbox" id="chk-inativas" onchange="toggleMostrarInativas(this.checked)" style="cursor:pointer;"/> Mostrar inativas</label></div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:5px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;"><input type="checkbox" id="chk-inativas" onchange="toggleMostrarInativas(this.checked)" style="cursor:pointer;"/> Mostrar inativas</label>
+          <label id="lbl-ocultar" style="display:none;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;"><input type="checkbox" id="chk-ocultar" onchange="toggleOcultarConcluidas(this.checked)" style="cursor:pointer;"/> Ocultar concluídas (100%)</label>
+        </div></div>
       <div class="emp-lista" id="emp-lista"><div class="vazio" style="padding:22px;">← Selecione</div></div>
     </div>
     <div class="col-tarefas" id="col-tarefas">
@@ -1257,6 +1260,9 @@ function replicarNaFrente(setor,mk,emp,desc,mesBase){
 let usuarioAtual=null,setorAtual='fiscal',membroAtual=null,empresaAtual=null;
 let mesAtual=null,verHistorico=false,empFiltro='',viewAtual='fiscal',mostrarInativas=false,mostrarNA=false;
 let abaEmpresa='tarefas'; // 'tarefas' | 'ficha' | 'bancos'
+// Ocultar empresas 100% concluídas no mês (preferência de VISUAL por navegador; não apaga nada)
+let ocultarConcluidas=(()=>{try{return localStorage.getItem('ccc_ocultar_concl')==='1';}catch(e){return false;}})();
+let _showConcluidas=false; // grupo "Concluídas este mês" expandido?
 
 function mesKeyFn(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
 function mesLabel(k){const[y,m]=k.split('-');return `${MESES[parseInt(m)-1]}/${y}`;}
@@ -1460,6 +1466,8 @@ function trocarView(v,btn){
   if(v==='processos'){renderProcessos();return;}
   if(v==='contabanual'){renderContabAnual();return;}
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
+  const _lblOc=document.getElementById('lbl-ocultar');
+  if(_lblOc){ _lblOc.style.display=(v==='fiscal'||v==='contabil')?'flex':'none'; const _ck=document.getElementById('chk-ocultar'); if(_ck)_ck.checked=ocultarConcluidas; }
   const u=USUARIOS[usuarioAtual];
   const colMembros=document.getElementById('col-membros');
   if(v==='contabil'||v==='fichas'||v==='societario'){
@@ -1510,7 +1518,7 @@ function renderEmpresasFiscal(){
   let lista=empFiltro?carteira.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):carteira.slice();
   if(!mostrarInativas)lista=lista.filter(empAtiva);
   if(lista.length===0){el.innerHTML='<div class="vazio">Nenhuma encontrada</div>';return;}
-  lista.forEach(emp=>el.appendChild(criarEmpItem(emp,'fiscal',m.id,m.cor)));
+  _appendLista(el, lista, 'fiscal', m.id, m.cor, !empFiltro);
 }
 function renderEmpresasContabil(){
   const el=document.getElementById('emp-lista');el.innerHTML='';
@@ -1519,7 +1527,7 @@ function renderEmpresasContabil(){
   if(lista.length===0){el.innerHTML='<div class="vazio">Nenhuma encontrada</div>';return;}
   const _soc=setorAtual==='societario';
   const _st=_soc?'societario':'contabil', _cor=_soc?'#7c3aed':'#2563eb';
-  lista.forEach(emp=>el.appendChild(criarEmpItem(emp,_st,_st,_cor)));
+  _appendLista(el, lista, _st, _st, _cor, setorAtual==='contabil' && !empFiltro);
 }
 function criarEmpItem(emp,setor,mk,cor){
   const {tarefas,responsavel}=getMesData(setor,mk,emp,mesAtual);
@@ -1584,6 +1592,29 @@ function buscarEmp(val){
   }
 }
 function toggleMostrarInativas(v){mostrarInativas=v;if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();}
+// Empresa 100% concluída NO MÊS = tem tarefas aplicáveis e todas feitas (N/A não conta).
+function _empConcluida(setor,mk,emp){ const d=getMesData(setor,mk,emp,mesAtual); const p=_prog(d.tarefas); return p.aplic>0 && p.feitas===p.aplic; }
+function toggleOcultarConcluidas(v){ ocultarConcluidas=v; _showConcluidas=false; try{localStorage.setItem('ccc_ocultar_concl',v?'1':'0');}catch(e){} _reRenderListaAtual(); }
+function _toggleConcluidasGrupo(){ _showConcluidas=!_showConcluidas; _reRenderListaAtual(); }
+function _reRenderListaAtual(){ if(setorAtual==='fiscal'){ if(empFiltro&&empFiltro.trim())renderEmpresasFiscalGlobal(empFiltro.trim()); else if(membroAtual)renderEmpresasFiscal(); } else renderEmpresasContabil(); }
+// Monta a lista; com "ocultar concluídas" ligado, separa as 100% num grupo recolhível (nada é apagado).
+function _appendLista(el, lista, setor, mk, cor, podeOcultar){
+  if(!(ocultarConcluidas && podeOcultar)){ lista.forEach(emp=>el.appendChild(criarEmpItem(emp,setor,mk,cor))); return; }
+  const pend=[], feitas=[];
+  lista.forEach(emp=>{ (_empConcluida(setor,mk,emp)?feitas:pend).push(emp); });
+  pend.forEach(emp=>el.appendChild(criarEmpItem(emp,setor,mk,cor)));
+  if(pend.length===0 && feitas.length>0){
+    const ok=document.createElement('div'); ok.style.cssText='text-align:center;padding:16px 10px;font-size:12px;color:var(--green);font-weight:600;';
+    ok.textContent='🎉 Tudo concluído este mês!'; el.appendChild(ok);
+  }
+  if(feitas.length>0){
+    const h=document.createElement('div'); h.onclick=_toggleConcluidasGrupo;
+    h.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;margin-top:6px;border-top:0.5px solid var(--border);font-size:11px;cursor:pointer;user-select:none;';
+    h.innerHTML=`<span style="color:var(--green);font-weight:600;">✓ Concluídas este mês · ${feitas.length}</span><span style="color:var(--accent);">${_showConcluidas?'ocultar ▲':'mostrar ▼'}</span>`;
+    el.appendChild(h);
+    if(_showConcluidas) feitas.forEach(emp=>{ const it=criarEmpItem(emp,setor,mk,cor); it.style.opacity='0.72'; el.appendChild(it); });
+  }
+}
 function selecionarEmpresa(emp){
   empresaAtual=emp;verHistorico=false;_obsNovaImgs=[];
   if(setorAtual==='fiscal')renderEmpresasFiscal();else renderEmpresasContabil();
