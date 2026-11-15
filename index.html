@@ -982,7 +982,7 @@ async function loadDBCells(){
     const all=await window.Backend.getAllCells(); // [{key,value}] — todas as células de uma vez (paginado)
     for(const row of all){
       const p=_parseCellKey(row.key); if(!p)continue;
-      if(p.s!=='fiscal'&&p.s!=='contabil')continue; // ignora chaves tc: estranhas (teste/lixo); DELETE é bloqueado na kv_store
+      if(p.s!=='fiscal'&&p.s!=='contabil'&&p.s!=='societario')continue; // ignora chaves tc: estranhas (teste/lixo); DELETE é bloqueado na kv_store
       const dk=p.s+'|'+p.mk+'|'+p.emp+'|'+p.mes;
       if(_dirty.has(dk))continue;          // preserva edição local ainda não salva (mesma regra do blob)
       let cell; try{ cell=JSON.parse(row.value); }catch(e){ continue; }
@@ -1019,7 +1019,7 @@ async function _doSaveCells(){
 // Recarrega UMA célula (quando o realtime avisa que outra pessoa gravou aquela empresa-mês).
 async function _reloadCell(k){
   const p=_parseCellKey(k); if(!p)return;
-  if(p.s!=='fiscal'&&p.s!=='contabil')return; // ignora chaves tc: estranhas
+  if(p.s!=='fiscal'&&p.s!=='contabil'&&p.s!=='societario')return; // ignora chaves tc: estranhas
   const dk=p.s+'|'+p.mk+'|'+p.emp+'|'+p.mes;
   if(_dirty.has(dk))return;                // não sobrescreve edição local pendente
   try{
@@ -1220,7 +1220,7 @@ function _contabTarefaNoMes(desc, mesNum, ficha){
 }
 // Monta as tarefas de um mes novo: 'pendente', mas ja marca 'nao se aplica' as herdadas do mes anterior.
 function novasTarefasMes(setor,mk,emp,mes){
-  let pad=setor==='fiscal'?PAD_FISCAL:PAD_CONTABIL;
+  let pad=setor==='fiscal'?PAD_FISCAL:setor==='societario'?[]:PAD_CONTABIL;
   // No mês de virada de regime, NÃO herda o "não se aplica" do regime antigo — começa limpo.
   const na=ehMesDeVirada(emp,mes)?new Set():statusNaAnterior(setor,mk,emp,mes);
   const dirbiObrig=(fichas[emp]||{}).dirbi===true; // só as empresas obrigadas fazem DIRBI
@@ -1279,6 +1279,7 @@ function empresasDoMembro(mkId,mesKey){
   return TODAS_EMPRESAS.filter(e=>ownerNoMes(e,mesKey)===mkId);
 }
 function getMembroKey(){
+  if(setorAtual==='societario')return 'societario';
   if(setorAtual!=='fiscal')return 'contabil';
   if(empresaAtual){ const o=ownerNoMes(empresaAtual,mesAtual); if(o)return o; } // tarefas ficam com o dono do mês
   return membroAtual;
@@ -1356,9 +1357,9 @@ async function iniciarApp(){
     bca0.onclick=()=>trocarView('contabanual',bca0);nav.appendChild(bca0);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
-    ['monitor','fichas','fiscal','contabil','relatorios','admin'].forEach(v=>{
+    ['monitor','fichas','fiscal','contabil','societario','relatorios','admin'].forEach(v=>{
       const btn=document.createElement('button');btn.className='nav-btn'+(v==='monitor'?' active':'');btn.dataset.view=v;
-      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='fichas'?'🏢 Ficha das Empresas':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
+      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='fichas'?'🏢 Ficha das Empresas':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='societario'?'🏛️ Setor Societário':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
       btn.onclick=()=>trocarView(v,btn);nav.appendChild(btn);
     });
     document.getElementById('btn-add-tarefa').style.display='';
@@ -1461,7 +1462,7 @@ function trocarView(v,btn){
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
   const u=USUARIOS[usuarioAtual];
   const colMembros=document.getElementById('col-membros');
-  if(v==='contabil'||v==='fichas'){
+  if(v==='contabil'||v==='fichas'||v==='societario'){
     colMembros.style.display='none';
     document.getElementById('col2-titulo').textContent=v==='fichas'?'Empresas':((isGestora()||u.setor==='contabil')?'Todas as Empresas':'Minhas Empresas');
     document.getElementById('col2-count').textContent=TODAS_EMPRESAS.length+' empresas';
@@ -1516,7 +1517,9 @@ function renderEmpresasContabil(){
   let lista=empFiltro?TODAS_EMPRESAS.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):TODAS_EMPRESAS.slice();
   if(!mostrarInativas)lista=lista.filter(empAtiva);
   if(lista.length===0){el.innerHTML='<div class="vazio">Nenhuma encontrada</div>';return;}
-  lista.forEach(emp=>el.appendChild(criarEmpItem(emp,'contabil','contabil','#2563eb')));
+  const _soc=setorAtual==='societario';
+  const _st=_soc?'societario':'contabil', _cor=_soc?'#7c3aed':'#2563eb';
+  lista.forEach(emp=>el.appendChild(criarEmpItem(emp,_st,_st,_cor)));
 }
 function criarEmpItem(emp,setor,mk,cor){
   const {tarefas,responsavel}=getMesData(setor,mk,emp,mesAtual);
@@ -1670,17 +1673,19 @@ function renderTarefas(){
   let cor='#2563eb';
   if(setorAtual==='fiscal'&&membroAtual)cor=MEMBROS_FISCAL.find(x=>x.id===membroAtual)?.cor||cor;
   else if(setorAtual==='contabil'&&responsavel)cor=MEMBROS_CONTABIL.find(x=>x.id===responsavel)?.cor||cor;
+  else if(setorAtual==='societario')cor='#7c3aed';
 
   const hdr=document.createElement('div');hdr.className='emp-header';
   hdr.innerHTML=`<div class="eh-nome" title="${empresaAtual}">${empresaAtual}</div><div class="eh-right"><button class="hist-btn" onclick="abrirFichaEmpresaAtual()" title="Abrir a ficha cadastral desta empresa">🏢 Ficha</button><div class="mes-nav"><button class="mes-btn" onclick="navMes(-1)">‹</button><div class="mes-atual">${mesLabel(mesAtual)}</div><button class="mes-btn" onclick="navMes(1)">›</button></div><button class="hist-btn ${verHistorico?'active':''}" onclick="toggleHist()">📅 Histórico</button>${isGestora()?`<button class="btn-primary" onclick="abrirModalTarefa()" style="font-size:11px;padding:4px 9px;">+ Tarefa</button>`:''}</div>`;
   col.appendChild(hdr);
 
   // ABAS (no setor: Tarefas + Bancos + Regime/Importação; a Ficha cadastral e os CNAEs ficam na aba central)
+  const _soc=setorAtual==='societario';
   const tabs=document.createElement('div');tabs.className='emp-tabs';
   tabs.innerHTML=`
     <div class="emp-tab ${abaEmpresa!=='bancos'&&abaEmpresa!=='regime'&&abaEmpresa!=='obs'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
-    <div class="emp-tab ${abaEmpresa==='bancos'?'active':''}" onclick="trocarAbaEmpresa('bancos')">🏦 Bancos</div>
-    <div class="emp-tab ${abaEmpresa==='regime'?'active':''}" onclick="trocarAbaEmpresa('regime')">🧾 Regime / Importação</div>
+    ${_soc?'':`<div class="emp-tab ${abaEmpresa==='bancos'?'active':''}" onclick="trocarAbaEmpresa('bancos')">🏦 Bancos</div>
+    <div class="emp-tab ${abaEmpresa==='regime'?'active':''}" onclick="trocarAbaEmpresa('regime')">🧾 Regime / Importação</div>`}
     <div class="emp-tab ${abaEmpresa==='obs'?'active':''}" onclick="trocarAbaEmpresa('obs')">📝 Observações</div>`;
   col.appendChild(tabs);
 
@@ -1689,7 +1694,7 @@ function renderTarefas(){
   if(abaEmpresa==='obs'){
     const _fo=getFicha(empresaAtual);
     const _ob=document.createElement('div');_ob.className='ficha-wrap';
-    _ob.innerHTML=obsBlocoHTML(_fo, setorAtual==='contabil'?'Observação do Contábil':'Observação do Fiscal');
+    _ob.innerHTML=obsBlocoHTML(_fo, setorAtual==='societario'?'Observação do Societário':setorAtual==='contabil'?'Observação do Contábil':'Observação do Fiscal');
     col.appendChild(_ob);
     renderObsNovaImgs();
     return;
@@ -2615,7 +2620,7 @@ function _rerenderSocios(){
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',capitalSocial:'',socios:[],obs:[],obsFiscal:[],obsContabil:[],obsGeral:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',capitalSocial:'',socios:[],obs:[],obsFiscal:[],obsContabil:[],obsGeral:[],obsSocietario:[]};
 }
 // ── Histórico de tributação (mudança de regime durante o ano) ──
 // Cada segmento: {regime, desde:'AAAA-MM' (''=desde sempre), anexos:[]}
@@ -2659,6 +2664,7 @@ async function toggleAtivaEmpresa(){
 // "semente": na 1ª vez que um setor é aberto, ele recebe uma CÓPIA delas.
 function _obsProp(){
   if(viewAtual==='fichas') return 'obsGeral';
+  if(setorAtual==='societario') return 'obsSocietario';
   if(setorAtual==='contabil') return 'obsContabil';
   return 'obsFiscal';
 }
@@ -3473,7 +3479,7 @@ async function admRenomear(i){
   const nome=resp.trim(); if(!nome||nome===emp)return;
   if(TODAS_EMPRESAS.includes(nome)){toast('Já existe uma empresa com esse nome','#d97706');return;}
   try{ await window.Backend.renameEmpresa(emp,nome); }catch(e){toast('Erro ao renomear','#dc2626');return;}
-  ['fiscal','contabil'].forEach(s=>{ if(db[s]) for(const mk in db[s]){ if(db[s][mk]&&db[s][mk][emp]){ db[s][mk][nome]=db[s][mk][emp]; delete db[s][mk][emp]; } } });
+  ['fiscal','contabil','societario'].forEach(s=>{ if(db[s]) for(const mk in db[s]){ if(db[s][mk]&&db[s][mk][emp]){ db[s][mk][nome]=db[s][mk][emp]; delete db[s][mk][emp]; } } });
   try{await saveDB();}catch(e){}
   await loadRef(); renderAdminConteudo();
   toast('✓ Nome alterado!');
@@ -3556,8 +3562,8 @@ async function renomearEmpresa(){
   if(TODAS_EMPRESAS.includes(nome)){toast('Já existe uma empresa com esse nome','#d97706');return;}
   try{ await window.Backend.renameEmpresa(antigo, nome); }
   catch(e){ toast('Erro ao renomear (nome já existe?)','#dc2626'); return; }
-  // move as tarefas que usam o nome antigo como chave (fiscal e contábil)
-  ['fiscal','contabil'].forEach(s=>{ if(db[s]) for(const mk in db[s]){ if(db[s][mk] && db[s][mk][antigo]){ db[s][mk][nome]=db[s][mk][antigo]; delete db[s][mk][antigo]; } } });
+  // move as tarefas que usam o nome antigo como chave (fiscal, contábil e societário)
+  ['fiscal','contabil','societario'].forEach(s=>{ if(db[s]) for(const mk in db[s]){ if(db[s][mk] && db[s][mk][antigo]){ db[s][mk][nome]=db[s][mk][antigo]; delete db[s][mk][antigo]; } } });
   try{ await saveDB(); }catch(e){}
   await loadRef();
   empresaAtual=null;
