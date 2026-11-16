@@ -1361,6 +1361,9 @@ async function iniciarApp(){
   if(soControle){
     const bca0=document.createElement('button');bca0.className='nav-btn active';bca0.textContent='📅 Controle Anual';
     bca0.onclick=()=>trocarView('contabanual',bca0);nav.appendChild(bca0);
+    // Ficha das Empresas liberada para o perfil Controle Anual (somente leitura — toda edição da ficha é gestora)
+    const bfi0=document.createElement('button');bfi0.className='nav-btn';bfi0.textContent='🏢 Ficha das Empresas';bfi0.dataset.view='fichas';
+    bfi0.onclick=()=>trocarView('fichas',bfi0);nav.appendChild(bfi0);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
     ['monitor','fichas','fiscal','contabil','societario','relatorios','admin'].forEach(v=>{
