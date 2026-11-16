@@ -726,6 +726,7 @@ const USUARIOS={
   carla: {nome:'Carla',    cor:'#db2777',role:'equipe',setor:'contabil'},
   neusa: {nome:'Neusa',    cor:'#ca8a04',role:'equipe',setor:'contabil'},
   alexandra: {nome:'Alexandra', cor:'#0d9488', role:'controle'}, // acesso SÓ ao Controle Anual (view-only). Permissão no banco via tabela profiles.
+  jussara: {nome:'Jussara', cor:'#7c3aed', role:'societario', societario:true}, // acesso ao Setor Societário + Ficha das Empresas (leitura). Permissão no banco via tabela profiles.
 };
 
 const MEMBROS_FISCAL=[
@@ -740,7 +741,7 @@ const MEMBROS_CONTABIL=[
 ];
 // Fotos das meninas: arquivos em assets/fotos/<id>.jpg. Só os ids aqui mostram foto;
 // os demais caem na inicial colorida. _FOTO_V = cache-bust ao trocar uma foto.
-const FOTOS=new Set(['julia','carla','cleo','cris','gab','neusa','patty','diane','alexandra']);
+const FOTOS=new Set(['julia','carla','cleo','cris','gab','neusa','patty','diane','alexandra','jussara']);
 const _FOTO_V='1';
 function _avInner(id,nome,cor){
   const ini=(nome&&nome[0])||'?';
@@ -1319,7 +1320,7 @@ function initLogin(){
     const div=document.createElement('div');
     div.className='login-btn'+(u.role==='gestora'?' gestora':'');
     div.dataset.id=id;div.onclick=()=>selecionarUser(id);
-    div.innerHTML=`<div class="lav" style="background:${u.cor}">${_avInner(id,u.nome,u.cor)}</div><div class="lnome">${u.nome}</div><div class="ltag">${u.role==='gestora'?'✦ Gestora':u.role==='controle'?'Controle Anual':u.setor==='fiscal'?'Fiscal':'Contábil'}${u.licenca?' · Licença':''}</div>`;
+    div.innerHTML=`<div class="lav" style="background:${u.cor}">${_avInner(id,u.nome,u.cor)}</div><div class="lnome">${u.nome}</div><div class="ltag">${u.role==='gestora'?'✦ Gestora':u.role==='controle'?'Controle Anual':u.role==='societario'?'Societário':u.setor==='fiscal'?'Fiscal':'Contábil'}${u.licenca?' · Licença':''}</div>`;
     grid.appendChild(div);
   });
 }
@@ -1375,15 +1376,23 @@ function sair(){
 async function iniciarApp(){
   const u=USUARIOS[usuarioAtual];
   const d=new Date();mesAtual=mesKeyFn(new Date(d.getFullYear(),d.getMonth()-1,1)); // padrao = mes anterior (competencia que a equipe esta trabalhando)
-  document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${_avInner(usuarioAtual,u.nome,u.cor)}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.role==='controle'?'Controle Anual':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
+  document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${_avInner(usuarioAtual,u.nome,u.cor)}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.role==='controle'?'Controle Anual':u.role==='societario'?'Societário':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
   const nav=document.getElementById('nav-wrap');nav.innerHTML='';
   const soControle=(u.role==='controle'); // acesso restrito: vê SÓ a aba Controle Anual
+  const soSocietario=(u.role==='societario'); // acesso restrito: Setor Societário + Ficha das Empresas (leitura)
   if(soControle){
     const bca0=document.createElement('button');bca0.className='nav-btn active';bca0.textContent='📅 Controle Anual';
     bca0.onclick=()=>trocarView('contabanual',bca0);nav.appendChild(bca0);
     // Ficha das Empresas liberada para o perfil Controle Anual (somente leitura — toda edição da ficha é gestora)
     const bfi0=document.createElement('button');bfi0.className='nav-btn';bfi0.textContent='🏢 Ficha das Empresas';bfi0.dataset.view='fichas';
     bfi0.onclick=()=>trocarView('fichas',bfi0);nav.appendChild(bfi0);
+    document.getElementById('btn-add-tarefa').style.display='none';
+  } else if(soSocietario){
+    const bso=document.createElement('button');bso.className='nav-btn active';bso.textContent='🏛️ Setor Societário';bso.dataset.view='societario';
+    bso.onclick=()=>trocarView('societario',bso);nav.appendChild(bso);
+    // Ficha das Empresas em leitura (toda edição da ficha é gestora)
+    const bfis=document.createElement('button');bfis.className='nav-btn';bfis.textContent='🏢 Ficha das Empresas';bfis.dataset.view='fichas';
+    bfis.onclick=()=>trocarView('fichas',bfis);nav.appendChild(bfis);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
     ['monitor','fichas','fiscal','contabil','societario','relatorios','admin'].forEach(v=>{
@@ -1408,7 +1417,7 @@ async function iniciarApp(){
     bfi.onclick=()=>trocarView('fichas',bfi);nav.appendChild(bfi);
     document.getElementById('btn-add-tarefa').style.display='none';
   }
-  if(!soControle){ // os demais veem também Pendências, Processos e Controle Anual
+  if(!soControle && !soSocietario){ // os demais veem também Pendências, Processos e Controle Anual
     // Aba "Pendências" — cada um vê o que está atrasado + o do mês sendo feito
     const bpe=document.createElement('button');bpe.className='nav-btn';bpe.textContent='📋 Pendências';
     bpe.onclick=()=>trocarView('pendencias',bpe);nav.appendChild(bpe);
@@ -1468,7 +1477,7 @@ async function iniciarApp(){
     _ultimoSync=Date.now();
     try{ await loadDB(); if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas(); }catch(e){}
   });
-  trocarView(isGestora()?'monitor':(u.role==='controle'?'contabanual':USUARIOS[usuarioAtual].setor),document.querySelector('.nav-btn'));
+  trocarView(isGestora()?'monitor':(u.role==='controle'?'contabanual':u.role==='societario'?'societario':USUARIOS[usuarioAtual].setor),document.querySelector('.nav-btn'));
 }
 
 function trocarView(v,btn){
