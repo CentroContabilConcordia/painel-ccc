@@ -463,6 +463,7 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
   <div class="rel-wrap" id="painel-pendencias" style="display:none"></div>
   <div class="rel-wrap" id="painel-processos" style="display:none"></div>
   <div class="rel-wrap" id="painel-contabanual" style="display:none"></div>
+  <div class="rel-wrap" id="painel-societario" style="display:none"></div>
   <style>
     .ca-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
     .btn-copia-num{flex-shrink:0;background:var(--surface3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;padding:5px 8px;line-height:1;}
@@ -810,7 +811,18 @@ const SK_COLAB='ccc_colab_v1';
 const SK_BANCOS='ccc_bancos_v1';
 const SK_PROCESSOS='ccc_processos_v1';
 const SK_CONTAB_ANUAL='ccc_contab_anual_v1';
+const SK_SOCIETARIO='ccc_societario_v1';
 let processos=[]; let _procFiltro=''; let _procEditando=null; let _procImgs=[]; let _obsNovaImgs=[];
+// Societário: lista de demandas (modelo por evento, não mensal). Cada item = um serviço societário acompanhado até concluir.
+let societarioDem=[]; let _socFiltroStatus=''; let _socFiltroTipo=''; let _socBusca=''; let _socEditando=null; let _socExpandida=null;
+const SOC_TIPOS=['Abertura de empresa','Alteração contratual','Baixa de empresa','Transformação de natureza jurídica','Simples Nacional (opção/exclusão)','Enquadramento/Desenquadramento ME-EPP','Regularização cadastral','Certidão','Procuração','Alvará / Licença','Atendimento de exigência','Outro'];
+const SOC_STATUS=[['naoiniciada','Não iniciada'],['andamento','Em andamento'],['agdcliente','Aguardando doc. do cliente'],['agdassinatura','Aguardando assinatura'],['agdorgao','Aguardando órgão público'],['exigencia','Com exigência / pendência'],['concluida','Concluída'],['cancelada','Cancelada']];
+const SOC_PRIOS=[['urgente','Urgente'],['alta','Alta'],['normal','Normal'],['baixa','Baixa']];
+const SOC_CHECKLISTS={
+  'Alteração contratual':['Receber solicitação do cliente','Conferir dados cadastrais','Verificar documentação necessária','Elaborar alteração contratual','Encaminhar para conferência','Coletar assinaturas','Protocolar no órgão competente','Acompanhar deferimento','Atualizar CNPJ e demais cadastros','Atualizar sistema interno','Salvar documentos na pasta do cliente','Comunicar conclusão ao cliente'],
+  'Abertura de empresa':['Consulta de viabilidade','Consulta de nome empresarial','Elaborar contrato social','Registrar na Junta Comercial','Emitir CNPJ','Inscrições estadual e municipal','Solicitar alvarás e licenças','Entregar documentação ao cliente'],
+  'Baixa de empresa':['Elaborar distrato social','Coletar assinaturas','Protocolar na Junta Comercial','Baixa do CNPJ','Baixa das inscrições estadual e municipal','Cancelar alvarás e licenças','Conferir obrigações pendentes','Comunicar conclusão ao cliente'],
+};
 // Controle Anual do Contábil: contabAnual[ano][empresaNome] = {meses:{1..12}, balanco, ecd, ecf, obs}
 let contabAnual={}; let _caAno='2026'; let _caBusca=''; let _caSoPend=false; let _caRespFiltro='';
 let db={};let nextId=1;
@@ -1072,6 +1084,14 @@ async function loadProcessos(){
 async function saveProcessos(){
   try{await window.storage.set(SK_PROCESSOS,JSON.stringify(processos));}
   catch(e){console.warn('[CCC] saveProcessos falhou',e);}
+}
+async function loadSocietario(){
+  try{const r=await window.storage.get(SK_SOCIETARIO);if(r&&r.value){societarioDem=JSON.parse(r.value)||[];}}
+  catch(e){console.warn('[CCC] loadSocietario falhou',e);}
+}
+async function saveSocietario(){
+  try{await window.storage.set(SK_SOCIETARIO,JSON.stringify(societarioDem));}
+  catch(e){console.warn('[CCC] saveSocietario falhou',e);}
 }
 async function loadContabAnual(){
   try{const r=await window.storage.get(SK_CONTAB_ANUAL);if(r&&r.value)contabAnual=JSON.parse(r.value)||{};}
@@ -1406,6 +1426,7 @@ async function iniciarApp(){
   await loadEmpresasCad();
   await loadColaboradores();
   await loadProcessos();
+  await loadSocietario();
   await loadContabAnual();
   // Backup leve (2x/dia, da memória, 1 sessão). Checa no início e a cada 30 min — o timer só lê
   // a flag minúscula e o relógio; a cópia de verdade sai no máx 2x no dia inteiro (meio-dia e noite).
@@ -1431,6 +1452,7 @@ async function iniciarApp(){
             if(_mudouCel && empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas();
           }
           if(todos||keys.has(SK_PROCESSOS)){ await loadProcessos(); if(viewAtual==='processos' && !_procEditando)renderProcessos(); }
+          if(todos||keys.has(SK_SOCIETARIO)){ await loadSocietario(); if(viewAtual==='societario' && !_socEditando)renderSocietario(); }
           if(todos||keys.has(SK_CONTAB_ANUAL)){ await loadContabAnual(); if(viewAtual==='contabanual'){ if(document.getElementById('ca-tablehost'))renderCaTable(); else renderContabAnual(); } }
           if(todos||keys.has(SK_EMPRESAS_CAD)){ await loadEmpresasCad(); }
           if(todos||keys.has(SK_COLAB)){ await loadColaboradores(); }
@@ -1453,7 +1475,7 @@ function trocarView(v,btn){
   viewAtual=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias');
+  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario');
   document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
   document.getElementById('painel-admin').style.display=v==='admin'?'block':'none';
@@ -1461,6 +1483,7 @@ function trocarView(v,btn){
   document.getElementById('painel-pendencias').style.display=v==='pendencias'?'block':'none';
   document.getElementById('painel-processos').style.display=v==='processos'?'block':'none';
   document.getElementById('painel-contabanual').style.display=v==='contabanual'?'block':'none';
+  document.getElementById('painel-societario').style.display=v==='societario'?'block':'none';
   document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews&&v!=='fichas'?'':'none';
   if(v==='pendencias'){renderPendencias();return;}
   if(v==='monitor'){initMonitor();return;}
@@ -1468,12 +1491,13 @@ function trocarView(v,btn){
   if(v==='admin'){initAdmin();return;}
   if(v==='processos'){renderProcessos();return;}
   if(v==='contabanual'){renderContabAnual();return;}
+  if(v==='societario'){renderSocietario();return;}
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
   const _lblOc=document.getElementById('lbl-ocultar');
   if(_lblOc){ _lblOc.style.display=(v==='fiscal'||v==='contabil')?'flex':'none'; const _ck=document.getElementById('chk-ocultar'); if(_ck)_ck.checked=ocultarConcluidas; }
   const u=USUARIOS[usuarioAtual];
   const colMembros=document.getElementById('col-membros');
-  if(v==='contabil'||v==='fichas'||v==='societario'){
+  if(v==='contabil'||v==='fichas'){
     colMembros.style.display='none';
     document.getElementById('col2-titulo').textContent=v==='fichas'?'Empresas':((isGestora()||u.setor==='contabil')?'Todas as Empresas':'Minhas Empresas');
     document.getElementById('col2-count').textContent=TODAS_EMPRESAS.length+' empresas';
@@ -2477,6 +2501,223 @@ async function excluirProcesso(id){
   renderProcessos();
   toast('Processo excluído');
 }
+
+// ============ SETOR SOCIETÁRIO — Demandas ============
+function _podeSoc(){ return isGestora() || !!(USUARIOS[usuarioAtual]||{}).societario; }
+function _socStatusLabel(s){ const f=SOC_STATUS.find(x=>x[0]===s); return f?f[1]:s; }
+function _socStatusCor(s){ return {naoiniciada:'#6b7280',andamento:'#2563eb',agdcliente:'#d97706',agdassinatura:'#9333ea',agdorgao:'#0891b2',exigencia:'#dc2626',concluida:'#16a34a',cancelada:'#9ca3af'}[s]||'#6b7280'; }
+function _socPrioLabel(p){ const f=SOC_PRIOS.find(x=>x[0]===p); return f?f[1]:p; }
+function _socPrioCor(p){ return {urgente:'#dc2626',alta:'#d97706',normal:'#6b7280',baixa:'#9ca3af'}[p]||'#6b7280'; }
+function _socAtrasada(d){ if(d.status==='concluida'||d.status==='cancelada')return false; const p=d.prazoInterno||d.prazoLegal; return !!(p && p < _hojeYMD()); }
+function _socFmtData(ymd){ if(!ymd)return '—'; const a=ymd.split('-'); return a.length===3?(a[2]+'/'+a[1]):ymd; }
+function _socMembros(){ return Object.keys(USUARIOS).filter(id=>{const u=USUARIOS[id];return u.role==='gestora'||u.societario;}).map(id=>({id,nome:USUARIOS[id].nome})); }
+
+function renderSocietario(){
+  const el=document.getElementById('painel-societario'); if(!el)return;
+  const mesCur=_hojeYMD().slice(0,7);
+  let abertas=0,atrasadas=0,agdc=0,agdo=0,concMes=0;
+  societarioDem.forEach(d=>{
+    if(d.status!=='concluida'&&d.status!=='cancelada')abertas++;
+    if(_socAtrasada(d))atrasadas++;
+    if(d.status==='agdcliente')agdc++;
+    if(d.status==='agdorgao')agdo++;
+    if(d.status==='concluida'&&(d.dataConclusao||'').slice(0,7)===mesCur)concMes++;
+  });
+  const form=(_socEditando&&_podeSoc())?_socForm():'';
+  el.innerHTML=`
+    <div class="rel-titulo">🏛️ Setor Societário</div>
+    <div class="rel-sub">Demandas do societário — abertura, alteração, baixa, certidões, alvarás e mais</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:14px 0;">
+      ${_socMetrica('Em aberto',abertas,'')}
+      ${_socMetrica('Atrasadas',atrasadas,'#dc2626')}
+      ${_socMetrica('Aguard. cliente',agdc,'#d97706')}
+      ${_socMetrica('Aguard. órgão',agdo,'#0891b2')}
+      ${_socMetrica('Concluídas no mês',concMes,'#16a34a')}
+    </div>
+    <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center;">
+      ${_podeSoc()?`<button class="rel-btn" onclick="novaDemanda()">+ Nova demanda</button>`:''}
+      <select class="ficha-input" style="max-width:200px;" onchange="_socFiltroStatus=this.value;renderSocLista()">
+        <option value="">Todos os status</option>
+        ${SOC_STATUS.map(s=>`<option value="${s[0]}"${_socFiltroStatus===s[0]?' selected':''}>${s[1]}</option>`).join('')}
+      </select>
+      <select class="ficha-input" style="max-width:180px;" onchange="_socFiltroTipo=this.value;renderSocLista()">
+        <option value="">Todos os tipos</option>
+        ${SOC_TIPOS.map(t=>`<option value="${_escAttrP(t)}"${_socFiltroTipo===t?' selected':''}>${_escP(t)}</option>`).join('')}
+      </select>
+      <input class="ficha-input" placeholder="🔍 Buscar empresa..." value="${_escAttrP(_socBusca)}" oninput="_socBusca=this.value;renderSocLista()" style="max-width:220px;"/>
+      <span style="font-size:12px;color:var(--muted);">${societarioDem.length} demanda(s)</span>
+    </div>
+    ${form}
+    <div id="soc-lista"></div>`;
+  renderSocLista();
+}
+function _socMetrica(label,n,cor){ return `<div style="background:var(--surface3);border-radius:8px;padding:10px 12px;"><div style="font-size:12px;color:var(--muted);">${label}</div><div style="font-size:22px;font-weight:700;${cor?`color:${cor};`:''}">${n}</div></div>`; }
+
+function _socForm(){
+  const d=_socEditando==='novo'?{}:(societarioDem.find(x=>x.id===_socEditando)||{});
+  const L='display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;';
+  const emps=(typeof TODAS_EMPRESAS!=='undefined'&&TODAS_EMPRESAS.length?TODAS_EMPRESAS:Object.keys(fichas||{})).slice().sort((a,b)=>a.localeCompare(b,'pt'));
+  return `<div class="rel-filtros-card" style="margin-bottom:16px;">
+    <div class="rel-filtros-titulo">${_socEditando==='novo'?'Nova demanda':'Editar demanda'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div style="grid-column:1/3;"><label style="${L}">Empresa / Razão social</label>
+        <input class="ficha-input" id="soc-empresa" list="soc-emp-dl" value="${_escAttrP(d.empresa||'')}" oninput="_socPreencheCnpj()" placeholder="Nome da empresa ou pessoa"/>
+        <datalist id="soc-emp-dl">${emps.map(n=>`<option value="${_escAttrP(n)}"></option>`).join('')}</datalist></div>
+      <div><label style="${L}">CNPJ</label><input class="ficha-input" id="soc-cnpj" value="${_escAttrP(d.cnpj||'')}" placeholder="opcional"/></div>
+      <div><label style="${L}">Tipo de serviço</label>
+        <select class="ficha-input" id="soc-tipo">${SOC_TIPOS.map(t=>`<option${d.tipo===t?' selected':''}>${_escP(t)}</option>`).join('')}</select></div>
+      <div style="grid-column:1/3;"><label style="${L}">Descrição</label><textarea class="ficha-input" id="soc-desc" rows="2">${_escP(d.descricao||'')}</textarea></div>
+      <div><label style="${L}">Responsável</label>
+        <select class="ficha-input" id="soc-resp"><option value="">— Não atribuído —</option>${_socMembros().map(m=>`<option value="${m.id}"${d.responsavel===m.id?' selected':''}>${_escP(m.nome)}</option>`).join('')}</select></div>
+      <div><label style="${L}">Prioridade</label>
+        <select class="ficha-input" id="soc-prio">${SOC_PRIOS.map(p=>`<option value="${p[0]}"${(d.prioridade||'normal')===p[0]?' selected':''}>${p[1]}</option>`).join('')}</select></div>
+      <div><label style="${L}">Data de recebimento</label><input class="ficha-input" type="date" id="soc-receb" value="${d.dataRecebimento||_hojeYMD()}"/></div>
+      <div><label style="${L}">Prazo interno</label><input class="ficha-input" type="date" id="soc-pzint" value="${d.prazoInterno||''}"/></div>
+      <div><label style="${L}">Prazo legal / órgão</label><input class="ficha-input" type="date" id="soc-pzleg" value="${d.prazoLegal||''}"/></div>
+      <div><label style="${L}">Status</label>
+        <select class="ficha-input" id="soc-status">${SOC_STATUS.map(s=>`<option value="${s[0]}"${(d.status||'naoiniciada')===s[0]?' selected':''}>${s[1]}</option>`).join('')}</select></div>
+      <div style="grid-column:1/3;"><label style="${L}">Documentos necessários</label><textarea class="ficha-input" id="soc-docs" rows="2">${_escP(d.documentos||'')}</textarea></div>
+      <div style="grid-column:1/3;"><label style="${L}">Pendências</label><textarea class="ficha-input" id="soc-pend" rows="2">${_escP(d.pendencias||'')}</textarea></div>
+      <div style="grid-column:1/3;"><label style="${L}">Próxima ação</label><input class="ficha-input" id="soc-prox" value="${_escAttrP(d.proximaAcao||'')}" placeholder="O que precisa ser feito agora"/></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="rel-btn" onclick="salvarDemanda()">💾 Salvar</button>
+      <button class="rel-btn rel-btn-sec" onclick="cancelarDemanda()">Cancelar</button>
+    </div>
+  </div>`;
+}
+function _socPreencheCnpj(){ const nome=(document.getElementById('soc-empresa')||{}).value||''; const f=fichas[nome]; const c=document.getElementById('soc-cnpj'); if(f&&f.cnpj&&c&&!c.value.trim())c.value=f.cnpj; }
+
+function novaDemanda(){ if(!_podeSoc())return; _socEditando='novo'; _socExpandida=null; renderSocietario(); document.getElementById('soc-empresa')?.focus(); }
+function editarDemanda(id){ if(!_podeSoc())return; _socEditando=id; _socExpandida=null; renderSocietario(); }
+function cancelarDemanda(){ _socEditando=null; renderSocietario(); }
+
+async function salvarDemanda(){
+  if(!_podeSoc()){toast('Sem permissão','#dc2626');return;}
+  const g=id=>document.getElementById(id);
+  const empresa=(g('soc-empresa').value||'').trim();
+  if(!empresa){toast('Informe a empresa / razão social','#d97706');return;}
+  const novoStatus=g('soc-status').value;
+  const campos={
+    empresa, cnpj:(g('soc-cnpj').value||'').trim(), tipo:g('soc-tipo').value,
+    descricao:g('soc-desc').value||'', responsavel:g('soc-resp').value||'',
+    prioridade:g('soc-prio').value, dataRecebimento:g('soc-receb').value||'',
+    prazoInterno:g('soc-pzint').value||'', prazoLegal:g('soc-pzleg').value||'',
+    status:novoStatus, documentos:g('soc-docs').value||'', pendencias:g('soc-pend').value||'',
+    proximaAcao:(g('soc-prox').value||'').trim(),
+  };
+  if(_socEditando && _socEditando!=='novo'){
+    const d=societarioDem.find(x=>x.id===_socEditando);
+    if(d){
+      if(d.status!==novoStatus)(d.historico=d.historico||[]).push({em:_hojeYMD(),de:d.status,para:novoStatus,por:usuarioAtual});
+      Object.assign(d,campos);
+      d.dataConclusao=novoStatus==='concluida'?(d.dataConclusao||_hojeYMD()):'';
+      d.atualizadoEm=Date.now();
+    }
+  } else {
+    const chk=(SOC_CHECKLISTS[campos.tipo]||[]).map(t=>({t,ok:false}));
+    societarioDem.push(Object.assign({id:'soc_'+Date.now(),checklist:chk,historico:[{em:_hojeYMD(),de:'',para:novoStatus,por:usuarioAtual}],criadoPor:usuarioAtual,criadoEm:Date.now(),dataConclusao:novoStatus==='concluida'?_hojeYMD():''},campos));
+  }
+  _socEditando=null;
+  await saveSocietario();
+  renderSocietario();
+  toast('✓ Demanda salva!');
+}
+async function excluirDemanda(id){
+  if(!isGestora()){toast('Só a gestora exclui — para encerrar, use o status Cancelada','#dc2626');return;}
+  const d=societarioDem.find(x=>x.id===id); if(!d)return;
+  if(!confirm('Excluir de vez a demanda de "'+d.empresa+'"? Para apenas encerrar sem apagar, use o status Cancelada.'))return;
+  societarioDem=societarioDem.filter(x=>x.id!==id);
+  await saveSocietario(); renderSocietario(); toast('Demanda excluída');
+}
+async function mudarStatusDemanda(id,val){
+  if(!_podeSoc()){toast('Sem permissão','#dc2626');return;}
+  const d=societarioDem.find(x=>x.id===id); if(!d)return;
+  if(d.status!==val)(d.historico=d.historico||[]).push({em:_hojeYMD(),de:d.status,para:val,por:usuarioAtual});
+  d.status=val; d.dataConclusao=val==='concluida'?(d.dataConclusao||_hojeYMD()):''; d.atualizadoEm=Date.now();
+  await saveSocietario(); renderSocietario(); toast('✓ Status atualizado');
+}
+async function toggleSocChk(id,i){
+  if(!_podeSoc())return;
+  const d=societarioDem.find(x=>x.id===id); if(!d||!d.checklist||!d.checklist[i])return;
+  d.checklist[i].ok=!d.checklist[i].ok; d.atualizadoEm=Date.now();
+  await saveSocietario(); renderSocLista();
+}
+function toggleSocExp(id){ _socExpandida=_socExpandida===id?null:id; renderSocLista(); }
+
+function renderSocLista(){
+  const cont=document.getElementById('soc-lista'); if(!cont)return;
+  const b=(_socBusca||'').toLowerCase().trim();
+  let lista=societarioDem.filter(d=>{
+    if(_socFiltroStatus && d.status!==_socFiltroStatus)return false;
+    if(_socFiltroTipo && d.tipo!==_socFiltroTipo)return false;
+    if(b && !((d.empresa||'')+' '+(d.cnpj||'')+' '+(d.descricao||'')).toLowerCase().includes(b))return false;
+    return true;
+  });
+  const prioRank={urgente:0,alta:1,normal:2,baixa:3};
+  lista.sort((a,b2)=>{
+    const af=(a.status==='concluida'||a.status==='cancelada')?1:0, bf=(b2.status==='concluida'||b2.status==='cancelada')?1:0;
+    if(af!==bf)return af-bf;
+    const aa=_socAtrasada(a)?0:1, ba=_socAtrasada(b2)?0:1; if(aa!==ba)return aa-ba;
+    const ap=prioRank[a.prioridade]!=null?prioRank[a.prioridade]:2, bp=prioRank[b2.prioridade]!=null?prioRank[b2.prioridade]:2;
+    if(ap!==bp)return ap-bp;
+    return (a.prazoInterno||'9999-99-99').localeCompare(b2.prazoInterno||'9999-99-99');
+  });
+  if(lista.length===0){ cont.innerHTML='<div class="vazio" style="padding:26px;text-align:center;">'+((_socFiltroStatus||_socFiltroTipo||b)?'Nenhuma demanda com esse filtro.':'Nenhuma demanda ainda. Clique em “+ Nova demanda” para começar.')+'</div>'; return; }
+  cont.innerHTML=lista.map(_socCardHtml).join('');
+}
+function _socCardHtml(d){
+  const fin=(d.status==='concluida'||d.status==='cancelada');
+  const atras=_socAtrasada(d);
+  const respNome=(d.responsavel&&USUARIOS[d.responsavel])?USUARIOS[d.responsavel].nome:'';
+  const sc=_socStatusCor(d.status), pc=_socPrioCor(d.prioridade);
+  const exp=_socExpandida===d.id;
+  const pzTxt=d.prazoInterno?('Prazo: '+_socFmtData(d.prazoInterno)):(d.dataRecebimento?('Recebida: '+_socFmtData(d.dataRecebimento)):'');
+  const pzStyle=atras?'color:var(--red);font-weight:600;':'color:var(--muted);';
+  let corpo='';
+  if(exp){
+    const chk=d.checklist||[]; const chkDone=chk.filter(c=>c.ok).length;
+    corpo=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
+      ${d.descricao?`<div style="font-size:13px;color:var(--text2);margin-bottom:8px;white-space:pre-wrap;">${_escP(d.descricao)}</div>`:''}
+      <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">
+        ${d.dataRecebimento?`<span>Recebida: ${_socFmtData(d.dataRecebimento)}</span>`:''}
+        ${d.prazoLegal?`<span>Prazo legal: ${_socFmtData(d.prazoLegal)}</span>`:''}
+        ${d.dataConclusao?`<span>Concluída: ${_socFmtData(d.dataConclusao)}</span>`:''}
+      </div>
+      ${d.documentos?`<div style="font-size:12px;margin-bottom:6px;"><b>Documentos:</b> ${_escP(d.documentos)}</div>`:''}
+      ${d.pendencias?`<div style="font-size:12px;margin-bottom:6px;color:#b45309;"><b>Pendências:</b> ${_escP(d.pendencias)}</div>`:''}
+      ${chk.length?`<div style="margin:8px 0;"><div style="font-size:12px;color:var(--muted);margin-bottom:5px;">Checklist · ${chkDone}/${chk.length}</div>${chk.map((c,i)=>`<div style="font-size:13px;padding:2px 0;${_podeSoc()?'cursor:pointer;':''}color:${c.ok?'var(--green)':'var(--text2)'};" ${_podeSoc()?`onclick="toggleSocChk('${d.id}',${i})"`:''}>${c.ok?'☑':'☐'} ${_escP(c.t)}</div>`).join('')}</div>`:''}
+      ${d.proximaAcao?`<div style="font-size:13px;margin-top:6px;"><b>▶ Próxima ação:</b> ${_escP(d.proximaAcao)}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+        ${_podeSoc()?`<label style="font-size:12px;color:var(--muted);">Status:</label><select class="ficha-input" style="max-width:220px;padding:5px 8px;" onchange="mudarStatusDemanda('${d.id}',this.value)">${SOC_STATUS.map(s=>`<option value="${s[0]}"${d.status===s[0]?' selected':''}>${s[1]}</option>`).join('')}</select>`:''}
+        ${_podeSoc()?`<button class="tfiltro-btn" onclick="editarDemanda('${d.id}')">✏️ Editar</button>`:''}
+        ${isGestora()?`<button class="btn-danger" onclick="excluirDemanda('${d.id}')" title="Excluir">🗑️</button>`:''}
+      </div>
+    </div>`;
+  }
+  return `<div class="rel-section" style="margin-bottom:10px;${fin?'opacity:.72;':''}${atras?'border-left:3px solid var(--red);':''}">
+    <div style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;" onclick="toggleSocExp('${d.id}')">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:14px;font-weight:700;color:var(--text);">${_escP(d.empresa)}</span>
+          ${d.cnpj?`<span style="font-size:11px;color:var(--muted);">${_escP(d.cnpj)}</span>`:''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+          <span style="font-size:11px;background:var(--surface3);color:var(--text2);padding:2px 8px;border-radius:5px;">${_escP(d.tipo||'')}</span>
+          <span style="font-size:11px;background:${sc}22;color:${sc};padding:2px 8px;border-radius:5px;">${_socStatusLabel(d.status)}</span>
+          ${atras?`<span style="font-size:11px;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:5px;">⚠ Atrasada</span>`:''}
+        </div>
+      </div>
+      <div style="text-align:right;flex:none;">
+        <div style="font-size:11px;font-weight:600;color:${pc};">${_socPrioLabel(d.prioridade)}</div>
+        <div style="font-size:11px;${pzStyle}margin-top:3px;">${pzTxt}</div>
+        ${respNome?`<div style="font-size:11px;color:var(--muted);margin-top:2px;">▶ ${_escP(respNome)}</div>`:''}
+      </div>
+    </div>
+    ${corpo}
+  </div>`;
+}
+// ============ fim Societário ============
 
 // AÇÕES
 function navMes(dir){
