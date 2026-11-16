@@ -2979,14 +2979,14 @@ function obsBlocoHTML(ficha, titulo){
             ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" loading="lazy" style="max-width:150px;max-height:150px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/>${isGestora()?`<button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="removerImgObs('${o.id}',${ix})" title="Remover imagem">✕</button>`:''}</span>`).join('')}</div>`:''}
           </div>`).join('')}
       </div>
-      <div class="obs-add-row">
+      ${((USUARIOS[usuarioAtual]||{}).role==='societario')?'':`<div class="obs-add-row">
         <textarea class="obs-add-inp" id="obs-nova" placeholder="Adicionar observação, particularidade ou alerta..."></textarea>
         <button class="obs-add-btn" onclick="adicionarObs()">Adicionar</button>
       </div>
       <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <label class="tfiltro-btn" style="cursor:pointer;">📷 Anexar imagem à próxima observação<input type="file" accept="image/*" style="display:none" onchange="anexarImgNova(this)"/></label>
         <span id="obs-nova-imgs" style="display:flex;flex-wrap:wrap;gap:6px;"></span>
-      </div>
+      </div>`}
     </div>`;
 }
 
