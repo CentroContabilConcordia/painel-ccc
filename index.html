@@ -1108,8 +1108,13 @@ let _caRows=[];
 // Data de Abertura (Opção A): empresa não entra num ano anterior à sua abertura; e no ano de
 // abertura, os meses antes do mês de abertura ficam como "não existia" (cinza, fora das contas).
 // Sem data de abertura preenchida (nasc=0) não dá p/ saber -> continua aparecendo normal.
-function _caNascAAMM(n){ const ab=((fichas[n]||{}).abertura||''); if(ab.length<7)return 0; const a=parseInt(ab.slice(0,4),10),m=parseInt(ab.slice(5,7),10); return (a&&m)?a*100+m:0; }
+// "Nascimento" p/ o Controle Anual: usa o Início na contabilidade quando preenchido; senão, a Data de Abertura (comportamento antigo).
+function _caNascAAMM(n){ const f=fichas[n]||{}; const d=(f.inicioContabilidade||f.abertura||''); if(d.length<7)return 0; const a=parseInt(d.slice(0,4),10),m=parseInt(d.slice(5,7),10); return (a&&m)?a*100+m:0; }
 function _caNaoExistia(n,ano,m){ const nasc=_caNascAAMM(n); return nasc>0 && nasc > parseInt(ano,10)*100+m; }
+// Obrigação no Fiscal/Contábil começa no "Início na contabilidade" (SÓ esse campo — sem cair na abertura).
+// Empresa sem esse campo preenchido NÃO é afetada (segue como sempre). mesKey = 'YYYY-MM'.
+function _inicioObrigAAMM(n){ const d=((fichas[n]||{}).inicioContabilidade||''); if(d.length<7)return 0; const a=parseInt(d.slice(0,4),10),m=parseInt(d.slice(5,7),10); return (a&&m)?a*100+m:0; }
+function _naoExistiaMes(n,mesKey){ const ini=_inicioObrigAAMM(n); if(!ini||!mesKey||mesKey.length<7)return false; return ini > parseInt(mesKey.slice(0,4),10)*100+parseInt(mesKey.slice(5,7),10); }
 function _caAbriuDepoisDoAno(n,ano){ const nasc=_caNascAAMM(n); return nasc>0 && Math.floor(nasc/100) > parseInt(ano,10); }
 function _caEmpresasVisiveis(){
   let arr=TODAS_EMPRESAS.filter(n=>empAtiva(n) && !_caAbriuDepoisDoAno(n,_caAno));
@@ -1244,6 +1249,7 @@ function _contabTarefaNoMes(desc, mesNum, ficha){
 }
 // Monta as tarefas de um mes novo: 'pendente', mas ja marca 'nao se aplica' as herdadas do mes anterior.
 function novasTarefasMes(setor,mk,emp,mes){
+  if(_naoExistiaMes(emp,mes))return []; // antes do Início na contabilidade: sem obrigação (nenhuma tarefa)
   let pad=setor==='fiscal'?PAD_FISCAL:setor==='societario'?[]:PAD_CONTABIL;
   // No mês de virada de regime, NÃO herda o "não se aplica" do regime antigo — começa limpo.
   const na=ehMesDeVirada(emp,mes)?new Set():statusNaAnterior(setor,mk,emp,mes);
@@ -1303,7 +1309,7 @@ function ownerNoMes(emp,mesKey){
 }
 // Empresas de um membro fiscal NO MÊS indicado (considera as transferências)
 function empresasDoMembro(mkId,mesKey){
-  return TODAS_EMPRESAS.filter(e=>ownerNoMes(e,mesKey)===mkId);
+  return TODAS_EMPRESAS.filter(e=>ownerNoMes(e,mesKey)===mkId && !_naoExistiaMes(e,mesKey));
 }
 function getMembroKey(){
   if(setorAtual==='societario')return 'societario';
@@ -1560,6 +1566,7 @@ function renderEmpresasContabil(){
   const el=document.getElementById('emp-lista');el.innerHTML='';
   let lista=empFiltro?TODAS_EMPRESAS.filter(e=>e.toLowerCase().includes(empFiltro.toLowerCase())):TODAS_EMPRESAS.slice();
   if(!mostrarInativas)lista=lista.filter(empAtiva);
+  if(setorAtual==='contabil')lista=lista.filter(e=>!_naoExistiaMes(e,mesAtual)); // esconde quem ainda não iniciou na contabilidade neste mês (na Ficha mostra todas)
   if(lista.length===0){el.innerHTML='<div class="vazio">Nenhuma encontrada</div>';return;}
   const _soc=setorAtual==='societario';
   const _st=_soc?'societario':'contabil', _cor=_soc?'#7c3aed':'#2563eb';
@@ -2248,6 +2255,7 @@ const CAMPOS_CAD=[
  {key:'inscMunicipal',label:'Insc. Municipal',def:false},
  {key:'anexo',label:'Anexo Simples',def:false},
  {key:'abertura',label:'Data de Abertura',def:false},
+ {key:'inicioContabilidade',label:'Início na contabilidade',def:false},
  {key:'respFiscal',label:'Resp. Fiscal',def:false},
  {key:'respContabil',label:'Resp. Contábil',def:false},
 ];
@@ -2904,7 +2912,7 @@ function _rerenderSocios(){
 }
 
 function getFicha(emp){
-  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',capitalSocial:'',socios:[],obs:[],obsFiscal:[],obsContabil:[],obsGeral:[],obsSocietario:[]};
+  return fichas[emp]||{cnpj:'',regime:'Simples Nacional',anexo:'',anexos:[],cnaes:[],regimeHist:[],cnae:'',respFiscal:'',respContabil:'',gestora:'',importacao:'',importacoes:[],importacaoObs:'',abertura:'',inicioContabilidade:'',endereco:'',complemento:'',bairro:'',estado:'',cep:'',capitalSocial:'',socios:[],obs:[],obsFiscal:[],obsContabil:[],obsGeral:[],obsSocietario:[]};
 }
 // ── Histórico de tributação (mudança de regime durante o ano) ──
 // Cada segmento: {regime, desde:'AAAA-MM' (''=desde sempre), anexos:[]}
@@ -3012,6 +3020,7 @@ function renderFicha(col){
         <div class="ficha-campo"><div class="ficha-label">Código Questor</div><input class="ficha-input" id="f-codquestor" value="${ficha.codigoQuestor||''}" placeholder="Ex: 482" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">CNPJ</div><div style="display:flex;gap:5px;align-items:center;"><input class="ficha-input" id="f-cnpj" value="${ficha.cnpj||''}" placeholder="00.000.000/0001-00" ${ro} style="flex:1;"/><button type="button" class="btn-copia-num" onclick="copiarSoNumeros('f-cnpj','CNPJ')" title="Copiar só os números">📋</button></div></div>
         <div class="ficha-campo"><div class="ficha-label">Data de Abertura</div><input class="ficha-input" id="f-abertura" type="date" value="${ficha.abertura||''}" ${ro}/></div>
+        <div class="ficha-campo"><div class="ficha-label">Início na contabilidade</div><input class="ficha-input" id="f-inicioContab" type="date" value="${ficha.inicioContabilidade||''}" ${ro} title="A partir de quando a empresa tem obrigação aqui no escritório (gera as tarefas desse mês em diante)"/></div>
         <div class="ficha-campo"><div class="ficha-label">CNAE Principal</div><input class="ficha-input" id="f-cnae" value="${ficha.cnae||''}" placeholder="Ex: 6920-6/01" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Natureza Jurídica</div><input class="ficha-input" id="f-natureza" value="${ficha.natureza||''}" ${ro}/></div>
         <div class="ficha-campo"><div class="ficha-label">Inscrição Estadual</div><div style="display:flex;gap:5px;align-items:center;"><input class="ficha-input" id="f-inscEstadual" value="${ficha.inscEstadual||''}" ${ro} style="flex:1;"/><button type="button" class="btn-copia-num" onclick="copiarSoNumeros('f-inscEstadual','Inscrição Estadual')" title="Copiar só os números">📋</button></div></div>
@@ -3415,6 +3424,7 @@ async function salvarFicha(){
   ficha.codigoQuestor=(document.getElementById('f-codquestor')?.value||'').trim();
   ficha.cnpj=document.getElementById('f-cnpj')?.value||'';
   ficha.abertura=document.getElementById('f-abertura')?.value||'';
+  ficha.inicioContabilidade=document.getElementById('f-inicioContab')?.value||'';
   ficha.cnae=document.getElementById('f-cnae')?.value||'';
   ficha.natureza=document.getElementById('f-natureza')?.value||'';
   ficha.inscEstadual=document.getElementById('f-inscEstadual')?.value||'';
@@ -3716,6 +3726,7 @@ function renderAdminEmpresas(el){
         </div>
         <div class="ficha-campo"><div class="ficha-label">CNAE</div><input class="ficha-input" id="ne-cnae" placeholder="Ex: 6920-6/01"/></div>
         <div class="ficha-campo"><div class="ficha-label">Data de Abertura</div><input class="ficha-input" type="date" id="ne-abertura"/></div>
+        <div class="ficha-campo"><div class="ficha-label">Início na contabilidade</div><input class="ficha-input" type="date" id="ne-inicioContab" title="A partir de quando gera obrigação aqui no escritório"/></div>
       </div>
       <button class="admin-add-btn" onclick="cadastrarEmpresa()">+ Cadastrar Empresa</button>
     </div>
@@ -3816,6 +3827,7 @@ async function cadastrarEmpresa(){
     regime:document.getElementById('ne-regime')?.value||'Simples Nacional',
     cnae:document.getElementById('ne-cnae')?.value||'',
     abertura:document.getElementById('ne-abertura')?.value||'',
+    inicioContabilidade:document.getElementById('ne-inicioContab')?.value||'',
   };
   // Criar ficha automaticamente
   fichas[nome]={...empresasCad[nome],obs:[],contatos:[]};
