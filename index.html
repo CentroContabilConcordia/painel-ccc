@@ -464,6 +464,8 @@ header{background:#fff;border-bottom:1px solid var(--border);padding:0 22px;disp
   <div class="rel-wrap" id="painel-processos" style="display:none"></div>
   <div class="rel-wrap" id="painel-contabanual" style="display:none"></div>
   <div class="rel-wrap" id="painel-societario" style="display:none"></div>
+  <div class="rel-wrap" id="painel-bancosmes" style="display:none"></div>
+  <div class="rel-wrap" id="painel-notasfiscais" style="display:none"></div>
   <style>
     .ca-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
     .btn-copia-num{flex-shrink:0;background:var(--surface3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;padding:5px 8px;line-height:1;}
@@ -727,6 +729,7 @@ const USUARIOS={
   neusa: {nome:'Neusa',    cor:'#ca8a04',role:'equipe',setor:'contabil'},
   alexandra: {nome:'Alexandra', cor:'#0d9488', role:'controle'}, // acesso SÓ ao Controle Anual (view-only). Permissão no banco via tabela profiles.
   jussara: {nome:'Jussara', cor:'#7c3aed', role:'societario', societario:true}, // acesso ao Setor Societário + Ficha das Empresas (leitura). Permissão no banco via tabela profiles.
+  uriel: {nome:'Uriel', cor:'#0891b2', role:'uriel'}, // acesso fatiado: Bancos (controle mensal) + Notas Fiscais Emitidas. Telas "em preparação" (layout a definir). Permissão no banco via profiles (setor contábil p/ enxergar empresas).
 };
 
 const MEMBROS_FISCAL=[
@@ -1326,7 +1329,7 @@ function initLogin(){
     const div=document.createElement('div');
     div.className='login-btn'+(u.role==='gestora'?' gestora':'');
     div.dataset.id=id;div.onclick=()=>selecionarUser(id);
-    div.innerHTML=`<div class="lav" style="background:${u.cor}">${_avInner(id,u.nome,u.cor)}</div><div class="lnome">${u.nome}</div><div class="ltag">${u.role==='gestora'?'✦ Gestora':u.role==='controle'?'Controle Anual':u.role==='societario'?'Societário':u.setor==='fiscal'?'Fiscal':'Contábil'}${u.licenca?' · Licença':''}</div>`;
+    div.innerHTML=`<div class="lav" style="background:${u.cor}">${_avInner(id,u.nome,u.cor)}</div><div class="lnome">${u.nome}</div><div class="ltag">${u.role==='gestora'?'✦ Gestora':u.role==='controle'?'Controle Anual':u.role==='societario'?'Societário':u.role==='uriel'?'Bancos · Notas':u.setor==='fiscal'?'Fiscal':'Contábil'}${u.licenca?' · Licença':''}</div>`;
     grid.appendChild(div);
   });
 }
@@ -1382,10 +1385,11 @@ function sair(){
 async function iniciarApp(){
   const u=USUARIOS[usuarioAtual];
   const d=new Date();mesAtual=mesKeyFn(new Date(d.getFullYear(),d.getMonth()-1,1)); // padrao = mes anterior (competencia que a equipe esta trabalhando)
-  document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${_avInner(usuarioAtual,u.nome,u.cor)}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.role==='controle'?'Controle Anual':u.role==='societario'?'Societário':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
+  document.getElementById('user-chip').innerHTML=`<div class="uav" style="background:${u.cor}">${_avInner(usuarioAtual,u.nome,u.cor)}</div><span class="unome">${u.nome}</span><span class="utag">· ${u.role==='gestora'?'Gestora':u.role==='controle'?'Controle Anual':u.role==='societario'?'Societário':u.role==='uriel'?'Bancos · Notas':u.setor==='fiscal'?'Fiscal':'Contábil'}</span>`;
   const nav=document.getElementById('nav-wrap');nav.innerHTML='';
   const soControle=(u.role==='controle'); // acesso restrito: vê SÓ a aba Controle Anual
   const soSocietario=(u.role==='societario'); // acesso restrito: Setor Societário + Ficha das Empresas (leitura)
+  const soUriel=(u.role==='uriel'); // acesso restrito: Bancos (controle mensal) + Notas Fiscais Emitidas
   if(soControle){
     const bca0=document.createElement('button');bca0.className='nav-btn active';bca0.textContent='📅 Controle Anual';
     bca0.onclick=()=>trocarView('contabanual',bca0);nav.appendChild(bca0);
@@ -1399,6 +1403,13 @@ async function iniciarApp(){
     // Ficha das Empresas em leitura (toda edição da ficha é gestora)
     const bfis=document.createElement('button');bfis.className='nav-btn';bfis.textContent='🏢 Ficha das Empresas';bfis.dataset.view='fichas';
     bfis.onclick=()=>trocarView('fichas',bfis);nav.appendChild(bfis);
+    document.getElementById('btn-add-tarefa').style.display='none';
+  } else if(soUriel){
+    // Uriel: só as duas funções pelas quais ele é responsável (telas em preparação por enquanto).
+    const bbm=document.createElement('button');bbm.className='nav-btn active';bbm.textContent='🏦 Bancos';bbm.dataset.view='bancosmes';
+    bbm.onclick=()=>trocarView('bancosmes',bbm);nav.appendChild(bbm);
+    const bnf=document.createElement('button');bnf.className='nav-btn';bnf.textContent='🧾 Notas Fiscais Emitidas';bnf.dataset.view='notasfiscais';
+    bnf.onclick=()=>trocarView('notasfiscais',bnf);nav.appendChild(bnf);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
     ['monitor','fichas','fiscal','contabil','societario','relatorios','admin'].forEach(v=>{
@@ -1423,7 +1434,7 @@ async function iniciarApp(){
     bfi.onclick=()=>trocarView('fichas',bfi);nav.appendChild(bfi);
     document.getElementById('btn-add-tarefa').style.display='none';
   }
-  if(!soControle && !soSocietario){ // os demais veem também Pendências, Processos e Controle Anual
+  if(!soControle && !soSocietario && !soUriel){ // os demais veem também Pendências, Processos e Controle Anual
     // Aba "Pendências" — cada um vê o que está atrasado + o do mês sendo feito
     const bpe=document.createElement('button');bpe.className='nav-btn';bpe.textContent='📋 Pendências';
     bpe.onclick=()=>trocarView('pendencias',bpe);nav.appendChild(bpe);
@@ -1483,14 +1494,14 @@ async function iniciarApp(){
     _ultimoSync=Date.now();
     try{ await loadDB(); if(empresaAtual && abaEmpresa==='tarefas' && !_editando())renderTarefas(); }catch(e){}
   });
-  trocarView(isGestora()?'monitor':(u.role==='controle'?'contabanual':u.role==='societario'?'societario':USUARIOS[usuarioAtual].setor),document.querySelector('.nav-btn'));
+  trocarView(isGestora()?'monitor':(u.role==='controle'?'contabanual':u.role==='societario'?'societario':u.role==='uriel'?'bancosmes':USUARIOS[usuarioAtual].setor),document.querySelector('.nav-btn'));
 }
 
 function trocarView(v,btn){
   viewAtual=v;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario');
+  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario'||v==='bancosmes'||v==='notasfiscais');
   document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
   document.getElementById('painel-admin').style.display=v==='admin'?'block':'none';
@@ -1499,6 +1510,8 @@ function trocarView(v,btn){
   document.getElementById('painel-processos').style.display=v==='processos'?'block':'none';
   document.getElementById('painel-contabanual').style.display=v==='contabanual'?'block':'none';
   document.getElementById('painel-societario').style.display=v==='societario'?'block':'none';
+  document.getElementById('painel-bancosmes').style.display=v==='bancosmes'?'block':'none';
+  document.getElementById('painel-notasfiscais').style.display=v==='notasfiscais'?'block':'none';
   document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews&&v!=='fichas'?'':'none';
   if(v==='pendencias'){renderPendencias();return;}
   if(v==='monitor'){initMonitor();return;}
@@ -1507,6 +1520,8 @@ function trocarView(v,btn){
   if(v==='processos'){renderProcessos();return;}
   if(v==='contabanual'){renderContabAnual();return;}
   if(v==='societario'){renderSocietario();return;}
+  if(v==='bancosmes'){renderBancosMes();return;}
+  if(v==='notasfiscais'){renderNotasFiscais();return;}
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
   const _lblOc=document.getElementById('lbl-ocultar');
   if(_lblOc){ _lblOc.style.display=(v==='fiscal'||v==='contabil')?'flex':'none'; const _ck=document.getElementById('chk-ocultar'); if(_ck)_ck.checked=ocultarConcluidas; }
@@ -2735,6 +2750,29 @@ function _socCardHtml(d){
   </div>`;
 }
 // ============ fim Societário ============
+
+// ============ Telas do Uriel (em preparação) ============
+// Bancos (controle mensal) e Notas Fiscais Emitidas: o LAYOUT ainda vai ser definido com a Patrícia.
+// Por enquanto mostram um aviso "em preparação" só para o Uriel conseguir entrar e ver o espaço dele.
+function _telaEmPreparacao(titulo,desc){
+  return `<div class="rel-titulo">${titulo}</div>
+    <div style="max-width:580px;margin:48px auto;text-align:center;padding:36px 28px;border:1.5px dashed var(--border2);border-radius:14px;background:var(--surface2);">
+      <div style="font-size:46px;margin-bottom:12px;">🚧</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:10px;color:var(--text);">Em preparação</div>
+      <div style="font-size:14px;color:var(--muted);line-height:1.7;">${desc}</div>
+    </div>`;
+}
+function renderBancosMes(){
+  const el=document.getElementById('painel-bancosmes'); if(!el)return;
+  el.innerHTML=_telaEmPreparacao('🏦 Bancos — Controle Mensal',
+    'Aqui você vai acompanhar, mês a mês, os bancos de cada empresa:<br>☐ cliente enviou o extrato &nbsp;·&nbsp; ☐ importado no sistema.<br><br>Estamos montando esta tela com você. Em breve disponível.');
+}
+function renderNotasFiscais(){
+  const el=document.getElementById('painel-notasfiscais'); if(!el)return;
+  el.innerHTML=_telaEmPreparacao('🧾 Notas Fiscais Emitidas',
+    'Aqui você vai controlar a emissão de notas das empresas específicas da lista.<br><br>Estamos montando esta tela com você. Em breve disponível.');
+}
+// ============ fim Telas do Uriel ============
 
 // AÇÕES
 function navMes(dir){
