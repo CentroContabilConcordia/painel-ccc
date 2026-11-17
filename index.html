@@ -3762,11 +3762,28 @@ async function admRenomear(i){
   const resp=prompt('Novo nome da empresa:', emp); if(resp===null)return;
   const nome=resp.trim(); if(!nome||nome===emp)return;
   if(TODAS_EMPRESAS.includes(nome)){toast('Já existe uma empresa com esse nome','#d97706');return;}
+  // MODO CÉLULAS: o histórico de tarefas são chaves tc: que guardam o NOME antigo.
+  // Antes de renomear, copiamos cada célula para o nome novo (DELETE é bloqueado na
+  // kv_store, então as antigas ficam órfãs e inofensivas). Se isso falhar, NÃO renomeia
+  // — assim nunca separamos a empresa do seu histórico.
+  if(_useCells()){
+    try{
+      const all=await window.Backend.getAllCells();
+      for(const row of all){
+        const k=row&&row.key; if(!k||k.indexOf(CELL_PREFIX)!==0)continue;
+        const p=k.slice(CELL_PREFIX.length).split('|'); // s|mk|emp|mes
+        if(p[2]!==emp)continue;
+        await window.storage.set(CELL_PREFIX+p[0]+'|'+p[1]+'|'+nome+'|'+p[3], row.value);
+      }
+    }catch(e){ console.warn('[CCC] migrar historico no renomear falhou',e); toast('Erro ao migrar o histórico — nome NÃO alterado','#dc2626'); return; }
+  }
   try{ await window.Backend.renameEmpresa(emp,nome); }catch(e){toast('Erro ao renomear','#dc2626');return;}
   ['fiscal','contabil','societario'].forEach(s=>{ if(db[s]) for(const mk in db[s]){ if(db[s][mk]&&db[s][mk][emp]){ db[s][mk][nome]=db[s][mk][emp]; delete db[s][mk][emp]; } } });
   try{await saveDB();}catch(e){}
-  await loadRef(); renderAdminConteudo();
-  toast('✓ Nome alterado!');
+  await loadRef();
+  if(_useCells()){ try{ await loadDBCells(); }catch(e){} }
+  renderAdminConteudo();
+  toast('✓ Nome alterado! (histórico migrado)');
 }
 async function admExcluir(i){
   if(!isGestora()){toast('Sem permissão','#dc2626');return;}
