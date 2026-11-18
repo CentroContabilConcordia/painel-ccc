@@ -36,10 +36,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 
 /* LOGIN */
 .login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#3b1616 0%,#4a1c1c 50%,#6b7a4e 100%);display:flex;align-items:center;justify-content:center;z-index:999;}
-.login-box{background:#fff;border-radius:20px;padding:40px;width:400px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.login-box{background:#fff;border-radius:20px;padding:clamp(22px,5vw,40px);width:400px;max-width:95vw;max-height:94vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
 .login-logo{margin-bottom:2px;}
 .login-sub{font-size:12px;color:var(--muted);margin-bottom:28px;}
-.login-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;}
+.login-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:8px;margin-bottom:18px;}
 .login-btn{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;padding:12px 8px;cursor:pointer;transition:all .2s;text-align:center;}
 .login-btn:hover{border-color:var(--accent);background:var(--accent-light);}
 .login-btn.active{border-color:var(--accent);background:var(--accent-light);}
@@ -1368,6 +1368,8 @@ function selecionarUser(id){
   document.getElementById('login-senha').value='';
   document.getElementById('login-erro').textContent='';
   document.getElementById('login-senha').focus();
+  // Garante que o campo de senha + botão Entrar fiquem visíveis (com muitos perfis a lista empurrava p/ baixo)
+  setTimeout(()=>{ try{ (document.querySelector('.login-entrar')||document.getElementById('login-senha')).scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){} },140);
 }
 async function entrar(){
   if(!usuarioAtual){document.getElementById('login-erro').textContent='Selecione seu perfil.';return;}
