@@ -3928,10 +3928,10 @@ function renderBancos(col){
           ${podeEditar?`<button class="banco-del" onclick="editarBanco('${b.id}')" title="Editar">✎</button>${isGestora()?`<button class="banco-del" onclick="deletarBanco('${b.id}')" title="Remover">✕</button>`:''}`:''}
         </div>`;
       const rec=_bmRec(empresaAtual,mesAtual,b.id);
-      bancosHtml+=`<div class="banco-mes-ctrl" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:2px 10px 12px 56px;font-size:12px;border-bottom:1px solid var(--border);margin-bottom:6px;">
-          <span style="color:var(--muted);">Controle ${mesLabel(mesAtual)}:</span>
-          <label style="cursor:pointer;display:flex;gap:5px;align-items:center;color:${rec.ext?'var(--green)':'var(--text2)'};font-weight:${rec.ext?'600':'400'};"><input type="checkbox" ${rec.ext?'checked':''} onchange="toggleBancoMes('${b.id}','ext')"/> 📩 extrato recebido</label>
-          <label style="cursor:pointer;display:flex;gap:5px;align-items:center;color:${rec.imp?'var(--green)':'var(--text2)'};font-weight:${rec.imp?'600':'400'};"><input type="checkbox" ${rec.imp?'checked':''} onchange="toggleBancoMes('${b.id}','imp')"/> 💾 importado no sistema</label>
+      bancosHtml+=`<div class="banco-mes-ctrl" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:14px 16px 16px 56px;font-size:15px;border-bottom:1px solid var(--border);margin-bottom:10px;">
+          <span style="color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.3px;width:100%;">Controle ${mesLabel(mesAtual)}</span>
+          <label style="cursor:pointer;display:inline-flex;gap:9px;align-items:center;padding:10px 16px;border-radius:10px;border:2px solid ${rec.ext?'var(--green)':'var(--border)'};background:${rec.ext?'rgba(34,197,94,.10)':'var(--card)'};color:${rec.ext?'var(--green)':'var(--text2)'};font-weight:${rec.ext?'700':'500'};"><input type="checkbox" ${rec.ext?'checked':''} onchange="toggleBancoMes('${b.id}','ext')" style="width:20px;height:20px;cursor:pointer;accent-color:var(--green);"/> 📩 Extrato recebido</label>
+          <label style="cursor:pointer;display:inline-flex;gap:9px;align-items:center;padding:10px 16px;border-radius:10px;border:2px solid ${rec.imp?'var(--green)':'var(--border)'};background:${rec.imp?'rgba(34,197,94,.10)':'var(--card)'};color:${rec.imp?'var(--green)':'var(--text2)'};font-weight:${rec.imp?'700':'500'};"><input type="checkbox" ${rec.imp?'checked':''} onchange="toggleBancoMes('${b.id}','imp')" style="width:20px;height:20px;cursor:pointer;accent-color:var(--green);"/> 💾 Importado no sistema</label>
         </div>`;
     });
     bancosHtml+='</div>';
