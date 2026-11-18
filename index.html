@@ -816,6 +816,18 @@ const SK_BANCOS='ccc_bancos_v1';
 const SK_PROCESSOS='ccc_processos_v1';
 const SK_CONTAB_ANUAL='ccc_contab_anual_v1';
 const SK_SOCIETARIO='ccc_societario_v1';
+// Bancos — controle mensal por conta (☐ extrato recebido · ☐ importado). Blob próprio, independente
+// do status legado por banco, p/ alimentar também a visão consolidada do Uriel.
+const SK_BANCOS_MES='ccc_bancos_mes_v1';
+let bancosMes={}; // bancosMes[empresa][mesKey][contaId] = {ext:0/1, imp:0/1}
+let _bmMes=null; let _bmBusca=''; let _bmSoPend=false; let _bmFlat=[];
+// Notas Fiscais — modelo de DEMANDA: a menina do fiscal pede (dentro da empresa) → o Uriel emite.
+const SK_NOTAS='ccc_notas_v1';
+let notasDem=[]; let _notaEditando=null; let _notaEmitindo=null; let _notaFiltroStatus=''; let _notaBusca=''; let _notaExp=null;
+const NOTA_TIPOS=[['nfe','NF-e (produto)'],['nfse','NFS-e (serviço)']];
+const NOTA_NATUREZAS=['Venda','Remessa','Devolução','Bonificação','Transferência','Industrialização','Outra'];
+const NOTA_FORMAS=['À vista','A prazo','PIX','Boleto','Cartão','Dinheiro','Transferência','Outra'];
+const NOTA_STATUS=[['pendente','Pendente'],['emitida','Emitida'],['cancelada','Cancelada']];
 let processos=[]; let _procFiltro=''; let _procEditando=null; let _procImgs=[]; let _obsNovaImgs=[];
 // Societário: lista de demandas (modelo por evento, não mensal). Cada item = um serviço societário acompanhado até concluir.
 let societarioDem=[]; let _socFiltroStatus=''; let _socFiltroTipo=''; let _socBusca=''; let _socEditando=null; let _socExpandida=null;
@@ -1096,6 +1108,22 @@ async function loadSocietario(){
 async function saveSocietario(){
   try{await window.storage.set(SK_SOCIETARIO,JSON.stringify(societarioDem));}
   catch(e){console.warn('[CCC] saveSocietario falhou',e);}
+}
+async function loadBancosMes(){
+  try{const r=await window.storage.get(SK_BANCOS_MES);if(r&&r.value){bancosMes=JSON.parse(r.value)||{};}}
+  catch(e){console.warn('[CCC] loadBancosMes falhou',e);}
+}
+async function saveBancosMes(){
+  try{await window.storage.set(SK_BANCOS_MES,JSON.stringify(bancosMes));}
+  catch(e){console.warn('[CCC] saveBancosMes falhou',e);}
+}
+async function loadNotas(){
+  try{const r=await window.storage.get(SK_NOTAS);if(r&&r.value){notasDem=JSON.parse(r.value)||[];}}
+  catch(e){console.warn('[CCC] loadNotas falhou',e);}
+}
+async function saveNotas(){
+  try{await window.storage.set(SK_NOTAS,JSON.stringify(notasDem));}
+  catch(e){console.warn('[CCC] saveNotas falhou',e);}
 }
 async function loadContabAnual(){
   try{const r=await window.storage.get(SK_CONTAB_ANUAL);if(r&&r.value)contabAnual=JSON.parse(r.value)||{};}
@@ -1453,6 +1481,8 @@ async function iniciarApp(){
   await loadColaboradores();
   await loadProcessos();
   await loadSocietario();
+  await loadBancosMes();
+  await loadNotas();
   await loadContabAnual();
   // Backup leve (2x/dia, da memória, 1 sessão). Checa no início e a cada 30 min — o timer só lê
   // a flag minúscula e o relógio; a cópia de verdade sai no máx 2x no dia inteiro (meio-dia e noite).
@@ -1479,6 +1509,8 @@ async function iniciarApp(){
           }
           if(todos||keys.has(SK_PROCESSOS)){ await loadProcessos(); if(viewAtual==='processos' && !_procEditando)renderProcessos(); }
           if(todos||keys.has(SK_SOCIETARIO)){ await loadSocietario(); if(viewAtual==='societario' && !_socEditando)renderSocietario(); }
+          if(todos||keys.has(SK_BANCOS_MES)){ await loadBancosMes(); if(viewAtual==='bancosmes')renderBancosMes(); }
+          if(todos||keys.has(SK_NOTAS)){ await loadNotas(); if(viewAtual==='notasfiscais' && !_notaEmitindo && !_notaEditando)renderNotasFiscais(); }
           if(todos||keys.has(SK_CONTAB_ANUAL)){ await loadContabAnual(); if(viewAtual==='contabanual'){ if(document.getElementById('ca-tablehost'))renderCaTable(); else renderContabAnual(); } }
           if(todos||keys.has(SK_EMPRESAS_CAD)){ await loadEmpresasCad(); }
           if(todos||keys.has(SK_COLAB)){ await loadColaboradores(); }
@@ -1772,13 +1804,15 @@ function renderTarefas(){
   const _soc=setorAtual==='societario';
   const tabs=document.createElement('div');tabs.className='emp-tabs';
   tabs.innerHTML=`
-    <div class="emp-tab ${abaEmpresa!=='bancos'&&abaEmpresa!=='regime'&&abaEmpresa!=='obs'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
+    <div class="emp-tab ${abaEmpresa!=='bancos'&&abaEmpresa!=='regime'&&abaEmpresa!=='obs'&&abaEmpresa!=='notas'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
     ${_soc?'':`<div class="emp-tab ${abaEmpresa==='bancos'?'active':''}" onclick="trocarAbaEmpresa('bancos')">🏦 Bancos</div>
-    <div class="emp-tab ${abaEmpresa==='regime'?'active':''}" onclick="trocarAbaEmpresa('regime')">🧾 Regime / Importação</div>`}
+    <div class="emp-tab ${abaEmpresa==='notas'?'active':''}" onclick="trocarAbaEmpresa('notas')">🧾 Notas p/ emitir</div>
+    <div class="emp-tab ${abaEmpresa==='regime'?'active':''}" onclick="trocarAbaEmpresa('regime')">⚖️ Regime / Importação</div>`}
     <div class="emp-tab ${abaEmpresa==='obs'?'active':''}" onclick="trocarAbaEmpresa('obs')">📝 Observações</div>`;
   col.appendChild(tabs);
 
   if(abaEmpresa==='bancos'){renderBancos(col);return;}
+  if(abaEmpresa==='notas'){renderNotasEmpresa(col);return;}
   if(abaEmpresa==='regime'){renderRegimeImport(col);return;}
   if(abaEmpresa==='obs'){
     const _fo=getFicha(empresaAtual);
@@ -2751,26 +2785,301 @@ function _socCardHtml(d){
 }
 // ============ fim Societário ============
 
-// ============ Telas do Uriel (em preparação) ============
-// Bancos (controle mensal) e Notas Fiscais Emitidas: o LAYOUT ainda vai ser definido com a Patrícia.
-// Por enquanto mostram um aviso "em preparação" só para o Uriel conseguir entrar e ver o espaço dele.
-function _telaEmPreparacao(titulo,desc){
-  return `<div class="rel-titulo">${titulo}</div>
-    <div style="max-width:580px;margin:48px auto;text-align:center;padding:36px 28px;border:1.5px dashed var(--border2);border-radius:14px;background:var(--surface2);">
-      <div style="font-size:46px;margin-bottom:12px;">🚧</div>
-      <div style="font-size:18px;font-weight:700;margin-bottom:10px;color:var(--text);">Em preparação</div>
-      <div style="font-size:14px;color:var(--muted);line-height:1.7;">${desc}</div>
-    </div>`;
+// ============ Telas do Uriel ============
+
+// ----- 🏦 Bancos: controle mensal por conta (☐ extrato recebido · ☐ importado) -----
+function _bmRec(emp,mes,cid){ return (((bancosMes[emp]||{})[mes]||{})[cid])||{ext:0,imp:0}; }
+async function _bmToggle(emp,mes,cid,field){
+  if(!bancosMes[emp])bancosMes[emp]={};
+  if(!bancosMes[emp][mes])bancosMes[emp][mes]={};
+  if(!bancosMes[emp][mes][cid])bancosMes[emp][mes][cid]={ext:0,imp:0};
+  const r=bancosMes[emp][mes][cid]; r[field]=r[field]?0:1;
+  await saveBancosMes();
 }
+async function toggleBancoMes(cid,field){ await _bmToggle(empresaAtual,mesAtual,cid,field); renderTarefas(); }
+function _mesAdd(mk,delta){ const a=parseInt(mk.slice(0,4),10),m=parseInt(mk.slice(5,7),10); return mesKeyFn(new Date(a,m-1+delta,1)); }
+function navBmMes(delta){ _bmMes=_mesAdd(_bmMes||mesAtual||_hojeYMD().slice(0,7),delta); renderBancosMes(); }
 function renderBancosMes(){
   const el=document.getElementById('painel-bancosmes'); if(!el)return;
-  el.innerHTML=_telaEmPreparacao('🏦 Bancos — Controle Mensal',
-    'Aqui você vai acompanhar, mês a mês, os bancos de cada empresa:<br>☐ cliente enviou o extrato &nbsp;·&nbsp; ☐ importado no sistema.<br><br>Estamos montando esta tela com você. Em breve disponível.');
+  if(!_bmMes)_bmMes=mesAtual||_hojeYMD().slice(0,7);
+  const mes=_bmMes;
+  let totC=0,fExt=0,fImp=0;
+  Object.keys(bancosCad||{}).forEach(e=>{(bancosCad[e]||[]).forEach(c=>{totC++;const r=_bmRec(e,mes,c.id);if(!r.ext)fExt++;if(!r.imp)fImp++;});});
+  el.innerHTML=`
+    <div class="rel-titulo">🏦 Bancos — Controle Mensal</div>
+    <div class="rel-sub">Por conta: marque quando o cliente enviou o extrato e quando você importou no sistema.</div>
+    <div style="display:flex;gap:10px;align-items:center;margin:14px 0 8px;flex-wrap:wrap;">
+      <button class="mes-btn" onclick="navBmMes(-1)">‹</button>
+      <div style="font-weight:700;min-width:140px;text-align:center;">${mesLabel(mes)}</div>
+      <button class="mes-btn" onclick="navBmMes(1)">›</button>
+      <input class="ficha-input" placeholder="🔍 Buscar empresa..." value="${_escAttrP(_bmBusca)}" oninput="_bmBusca=this.value;renderBmLista()" style="max-width:220px;"/>
+      <label style="font-size:12px;color:var(--muted);display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="checkbox" ${_bmSoPend?'checked':''} onchange="_bmSoPend=this.checked;renderBmLista()"/> só pendentes</label>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:8px 0 12px;">
+      ${_socMetrica('Contas',totC,'')}
+      ${_socMetrica('Faltam extrato',fExt,fExt?'#d97706':'#16a34a')}
+      ${_socMetrica('Faltam importar',fImp,fImp?'#dc2626':'#16a34a')}
+    </div>
+    <div id="bm-lista"></div>`;
+  renderBmLista();
+}
+function renderBmLista(){
+  const cont=document.getElementById('bm-lista'); if(!cont)return;
+  const mes=_bmMes; const b=(_bmBusca||'').toLowerCase().trim();
+  _bmFlat=[];
+  const emps=Object.keys(bancosCad||{}).filter(e=>(bancosCad[e]||[]).length).sort((a,b2)=>a.localeCompare(b2,'pt'));
+  let rows='';
+  emps.forEach(emp=>{
+    if(b && !emp.toLowerCase().includes(b))return;
+    const contas=bancosCad[emp]||[]; let buff=''; let shown=0;
+    contas.forEach(c=>{
+      const r=_bmRec(emp,mes,c.id);
+      if(_bmSoPend && r.ext && r.imp)return;
+      const idx=_bmFlat.length; _bmFlat.push({emp,cid:c.id});
+      const det=[c.agencia?'Ag '+c.agencia:'',c.conta?'Cc '+c.conta:''].filter(Boolean).join(' · ');
+      buff+=`<tr style="border-top:1px solid var(--border);">
+        <td style="padding:7px 8px;">${_escP(c.nome)}${det?`<span style="color:var(--muted);font-size:11px;"> · ${_escP(det)}</span>`:''}</td>
+        <td style="padding:7px 8px;text-align:center;"><input type="checkbox" ${r.ext?'checked':''} onchange="toggleBancoMesCons(${idx},'ext')" style="cursor:pointer;transform:scale(1.2);"/></td>
+        <td style="padding:7px 8px;text-align:center;"><input type="checkbox" ${r.imp?'checked':''} onchange="toggleBancoMesCons(${idx},'imp')" style="cursor:pointer;transform:scale(1.2);"/></td>
+      </tr>`;
+      shown++;
+    });
+    if(shown)rows+=`<tr><td colspan="3" style="padding:12px 8px 3px;font-weight:700;font-size:13px;color:var(--text);">${_escP(emp)}</td></tr>`+buff;
+  });
+  if(!rows){ cont.innerHTML='<div class="vazio" style="padding:26px;text-align:center;">'+(_bmSoPend?'Nada pendente neste mês. 🎉':'Nenhuma conta bancária cadastrada ainda.')+'</div>'; return; }
+  cont.innerHTML=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">
+    <thead><tr style="background:var(--surface3);"><th style="text-align:left;padding:8px;">Conta</th><th style="padding:8px;width:120px;">📩 Extrato<br><span style="font-weight:400;font-size:11px;color:var(--muted);">recebido</span></th><th style="padding:8px;width:120px;">💾 Importado<br><span style="font-weight:400;font-size:11px;color:var(--muted);">no sistema</span></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+async function toggleBancoMesCons(idx,field){
+  const row=_bmFlat[idx]; if(!row)return;
+  await _bmToggle(row.emp,_bmMes,row.cid,field);
+  renderBmLista();
+}
+
+// ----- 🧾 Notas Fiscais: demanda do fiscal → o Uriel emite -----
+function _podePedirNota(){ return isGestora() || ((USUARIOS[usuarioAtual]||{}).setor==='fiscal'); }
+function _podeEmitirNota(){ return isGestora() || ((USUARIOS[usuarioAtual]||{}).role==='uriel'); }
+function _notaTipoLabel(t){ const x=NOTA_TIPOS.find(y=>y[0]===t); return x?x[1]:(t||'—'); }
+function _notaStatusLabel(s){ const x=NOTA_STATUS.find(y=>y[0]===s); return x?x[1]:(s||''); }
+function _notaStatusCor(s){ return {pendente:'#d97706',emitida:'#16a34a',cancelada:'#6b7280'}[s]||'#6b7280'; }
+function _notaFmtData(d){ if(!d||d.length<10)return d||''; return d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4); }
+function _notaAtrasada(n){ return n.status==='pendente' && n.diaSolicitado && n.diaSolicitado<_hojeYMD(); }
+function _reRenderNotas(){ if(viewAtual==='notasfiscais')renderNotasFiscais(); else if(empresaAtual&&abaEmpresa==='notas')renderTarefas(); }
+function toggleNotaExp(id){ _notaExp=_notaExp===id?null:id; _reRenderNotas(); }
+
+function _notaForm(){
+  const editing=_notaEditando && _notaEditando!=='novo';
+  const n=editing?(notasDem.find(x=>x.id===_notaEditando)||{}):{};
+  const emp=editing?(n.empresa||''):empresaAtual;
+  const L='display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;';
+  return `<div class="rel-filtros-card" style="margin-bottom:16px;">
+    <div class="rel-filtros-titulo">${editing?'Editar pedido de nota':'Novo pedido de nota'} — ${_escP(emp)}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label style="${L}">Cliente / destinatário *</label><input class="ficha-input" id="nota-cliente" value="${_escAttrP(n.cliente||'')}" placeholder="Para quem é a nota"/></div>
+      <div><label style="${L}">CNPJ/CPF do cliente</label><input class="ficha-input" id="nota-clientedoc" value="${_escAttrP(n.clienteDoc||'')}" placeholder="opcional"/></div>
+      <div><label style="${L}">Tipo da nota</label><select class="ficha-input" id="nota-tipo">${NOTA_TIPOS.map(t=>`<option value="${t[0]}"${(n.tipo||'nfe')===t[0]?' selected':''}>${t[1]}</option>`).join('')}</select></div>
+      <div><label style="${L}">Natureza (se NF-e)</label><select class="ficha-input" id="nota-natureza"><option value="">—</option>${NOTA_NATUREZAS.map(x=>`<option${n.natureza===x?' selected':''}>${x}</option>`).join('')}</select></div>
+      <div style="grid-column:1/3;"><label style="${L}">Descrição do item / serviço</label><textarea class="ficha-input" id="nota-desc" rows="2">${_escP(n.descricao||'')}</textarea></div>
+      <div><label style="${L}">Quantidade</label><input class="ficha-input" id="nota-qtd" value="${_escAttrP(n.quantidade||'')}" placeholder="ex.: 1"/></div>
+      <div><label style="${L}">Valor</label><input class="ficha-input" id="nota-valor" value="${_escAttrP(n.valor||'')}" placeholder="ex.: 1.500,00"/></div>
+      <div><label style="${L}">Forma de pagamento</label><select class="ficha-input" id="nota-forma"><option value="">—</option>${NOTA_FORMAS.map(x=>`<option${n.formaPgto===x?' selected':''}>${x}</option>`).join('')}</select></div>
+      <div><label style="${L}">Dia solicitado (emitir até)</label><input class="ficha-input" type="date" id="nota-dia" value="${n.diaSolicitado||_hojeYMD()}"/></div>
+      <div style="grid-column:1/3;"><label style="${L}">Observações</label><textarea class="ficha-input" id="nota-obs" rows="2">${_escP(n.obs||'')}</textarea></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="rel-btn" onclick="salvarNota()">💾 Salvar pedido</button>
+      <button class="rel-btn rel-btn-sec" onclick="cancelarNotaForm()">Cancelar</button>
+    </div>
+  </div>`;
+}
+function _notaEmitForm(n){
+  const L='display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;';
+  return `<div class="rel-filtros-card" style="margin-bottom:16px;border-left:3px solid var(--green);">
+    <div class="rel-filtros-titulo">✅ Registrar emissão — ${_escP(n.empresa)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">${_escP(n.cliente||'')} · ${_notaTipoLabel(n.tipo)}${n.descricao?' · '+_escP(n.descricao):''}${n.valor?' · R$ '+_escP(n.valor):''}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label style="${L}">Número da nota *</label><input class="ficha-input" id="nota-numero" value="${_escAttrP(n.numeroNota||'')}" placeholder="Nº da NF"/></div>
+      <div><label style="${L}">Data de emissão</label><input class="ficha-input" type="date" id="nota-dtemissao" value="${n.dataEmissao||_hojeYMD()}"/></div>
+      <div style="grid-column:1/3;"><label style="${L}">Observação da emissão (opcional)</label><input class="ficha-input" id="nota-obsemissao" value="${_escAttrP(n.obsEmissao||'')}" placeholder="chave de acesso, link, obs..."/></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="rel-btn" onclick="confirmarEmissao()">✅ Confirmar emissão</button>
+      <button class="rel-btn rel-btn-sec" onclick="cancelarEmissao()">Cancelar</button>
+    </div>
+  </div>`;
+}
+function novaNota(){ if(!_podePedirNota())return; _notaEditando='novo'; _notaEmitindo=null; _reRenderNotas(); setTimeout(()=>document.getElementById('nota-cliente')?.focus(),30); }
+function editarNota(id){ if(!_podePedirNota())return; _notaEditando=id; _notaEmitindo=null; _reRenderNotas(); }
+function cancelarNotaForm(){ _notaEditando=null; _reRenderNotas(); }
+async function salvarNota(){
+  if(!_podePedirNota()){toast('Sem permissão','#dc2626');return;}
+  const g=id=>document.getElementById(id);
+  const editing=_notaEditando && _notaEditando!=='novo';
+  const emp=editing?((notasDem.find(x=>x.id===_notaEditando)||{}).empresa):empresaAtual;
+  if(!emp){toast('Abra uma empresa para lançar o pedido','#d97706');return;}
+  const campos={
+    empresa:emp,
+    cliente:(g('nota-cliente').value||'').trim(), clienteDoc:(g('nota-clientedoc').value||'').trim(),
+    tipo:g('nota-tipo').value, natureza:g('nota-natureza').value||'',
+    descricao:(g('nota-desc').value||'').trim(), quantidade:(g('nota-qtd').value||'').trim(),
+    valor:(g('nota-valor').value||'').trim(), formaPgto:g('nota-forma').value||'',
+    diaSolicitado:g('nota-dia').value||_hojeYMD(), obs:(g('nota-obs').value||'').trim(),
+  };
+  if(!campos.cliente){toast('Informe o cliente / destinatário','#d97706');return;}
+  if(editing){ const n=notasDem.find(x=>x.id===_notaEditando); if(n)Object.assign(n,campos,{atualizadoEm:Date.now()}); }
+  else { notasDem.push(Object.assign({id:'nota_'+Date.now(),status:'pendente',solicitante:usuarioAtual,criadoEm:Date.now(),historico:[{em:_hojeYMD(),de:'',para:'pendente',por:usuarioAtual}]},campos)); }
+  _notaEditando=null;
+  await saveNotas(); _reRenderNotas(); toast('✓ Pedido salvo!');
+}
+function emitirNota(id){ if(!_podeEmitirNota()){toast('Sem permissão','#dc2626');return;} _notaEmitindo=id; _notaEditando=null; _reRenderNotas(); setTimeout(()=>document.getElementById('nota-numero')?.focus(),30); }
+function cancelarEmissao(){ _notaEmitindo=null; _reRenderNotas(); }
+async function confirmarEmissao(){
+  if(!_podeEmitirNota()){toast('Sem permissão','#dc2626');return;}
+  const n=notasDem.find(x=>x.id===_notaEmitindo); if(!n){_notaEmitindo=null;return;}
+  const num=(document.getElementById('nota-numero').value||'').trim();
+  if(!num){toast('Informe o número da nota','#d97706');return;}
+  n.numeroNota=num;
+  n.dataEmissao=document.getElementById('nota-dtemissao').value||_hojeYMD();
+  n.obsEmissao=(document.getElementById('nota-obsemissao').value||'').trim();
+  n.status='emitida'; n.emitidoPor=usuarioAtual; n.emitidoEm=Date.now();
+  (n.historico=n.historico||[]).push({em:_hojeYMD(),de:'pendente',para:'emitida',por:usuarioAtual});
+  _notaEmitindo=null;
+  await saveNotas(); _reRenderNotas(); toast('✅ Nota registrada como emitida!');
+}
+async function excluirNota(id){
+  if(!isGestora()){toast('Só a gestora exclui — para encerrar, use Cancelar pedido','#dc2626');return;}
+  const n=notasDem.find(x=>x.id===id); if(!n)return;
+  if(!confirm('Excluir de vez este pedido de nota de "'+n.empresa+'"?'))return;
+  notasDem=notasDem.filter(x=>x.id!==id);
+  await saveNotas(); _reRenderNotas(); toast('Pedido excluído');
+}
+async function mudarStatusNota(id,val){
+  if(!_podePedirNota()&&!isGestora()){toast('Sem permissão','#dc2626');return;}
+  const n=notasDem.find(x=>x.id===id); if(!n)return;
+  if(val==='cancelada' && !confirm('Cancelar este pedido de nota?'))return;
+  if(n.status!==val)(n.historico=n.historico||[]).push({em:_hojeYMD(),de:n.status,para:val,por:usuarioAtual});
+  n.status=val; n.atualizadoEm=Date.now();
+  await saveNotas(); _reRenderNotas(); toast('Pedido atualizado');
+}
+function _notaCard(n,opts){
+  opts=opts||{};
+  const exp=_notaExp===n.id;
+  const atras=_notaAtrasada(n);
+  const praHoje=n.status==='pendente'&&n.diaSolicitado===_hojeYMD();
+  const sc=_notaStatusCor(n.status);
+  const fin=(n.status==='emitida'||n.status==='cancelada');
+  let corpo='';
+  if(exp){
+    corpo=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
+      ${n.descricao?`<div style="font-size:13px;color:var(--text2);margin-bottom:8px;white-space:pre-wrap;">${_escP(n.descricao)}</div>`:''}
+      <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">
+        ${n.clienteDoc?`<span>Doc: ${_escP(n.clienteDoc)}</span>`:''}
+        ${n.quantidade?`<span>Qtd: ${_escP(n.quantidade)}</span>`:''}
+        ${n.valor?`<span>Valor: R$ ${_escP(n.valor)}</span>`:''}
+        ${n.formaPgto?`<span>Pgto: ${_escP(n.formaPgto)}</span>`:''}
+        ${n.natureza?`<span>Natureza: ${_escP(n.natureza)}</span>`:''}
+        ${n.diaSolicitado?`<span>Solicitado p/: ${_notaFmtData(n.diaSolicitado)}</span>`:''}
+      </div>
+      ${n.obs?`<div style="font-size:12px;margin-bottom:6px;"><b>Obs:</b> ${_escP(n.obs)}</div>`:''}
+      ${n.status==='emitida'?`<div style="font-size:12px;margin:6px 0;color:var(--green);"><b>✅ Emitida</b> — nº ${_escP(n.numeroNota||'')}${n.dataEmissao?' em '+_notaFmtData(n.dataEmissao):''}${n.emitidoPor&&USUARIOS[n.emitidoPor]?' por '+_escP(USUARIOS[n.emitidoPor].nome):''}${n.obsEmissao?' · '+_escP(n.obsEmissao):''}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+        ${(n.status==='pendente'&&opts.podeEmitir)?`<button class="rel-btn" onclick="emitirNota('${n.id}')">✅ Registrar emissão</button>`:''}
+        ${(n.status==='pendente'&&opts.podeEditar)?`<button class="tfiltro-btn" onclick="editarNota('${n.id}')">✏️ Editar</button>`:''}
+        ${(n.status!=='cancelada'&&n.status!=='emitida'&&(opts.podeEditar||isGestora()))?`<button class="tfiltro-btn" onclick="mudarStatusNota('${n.id}','cancelada')">🚫 Cancelar pedido</button>`:''}
+        ${isGestora()?`<button class="btn-danger" onclick="excluirNota('${n.id}')" title="Excluir">🗑️</button>`:''}
+      </div>
+    </div>`;
+  }
+  return `<div class="rel-section" style="margin-bottom:10px;${fin?'opacity:.72;':''}${atras?'border-left:3px solid var(--red);':praHoje?'border-left:3px solid #d97706;':''}">
+    <div style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;" onclick="toggleNotaExp('${n.id}')">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+          ${opts.showEmpresa?`<span style="font-size:14px;font-weight:700;color:var(--text);">${_escP(n.empresa)}</span>`:''}
+          <span style="font-size:${opts.showEmpresa?'12px':'14px'};font-weight:${opts.showEmpresa?'400':'700'};color:${opts.showEmpresa?'var(--muted)':'var(--text)'};">${_escP(n.cliente||'(sem cliente)')}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+          <span style="font-size:11px;background:var(--surface3);color:var(--text2);padding:2px 8px;border-radius:5px;">${_notaTipoLabel(n.tipo)}</span>
+          <span style="font-size:11px;background:${sc}22;color:${sc};padding:2px 8px;border-radius:5px;">${_notaStatusLabel(n.status)}</span>
+          ${atras?`<span style="font-size:11px;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:5px;">⚠ Atrasada</span>`:praHoje?`<span style="font-size:11px;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:5px;">⏰ Para hoje</span>`:''}
+          ${n.valor?`<span style="font-size:11px;color:var(--muted);">R$ ${_escP(n.valor)}</span>`:''}
+        </div>
+      </div>
+      <div style="text-align:right;flex:none;">
+        <div style="font-size:11px;color:var(--muted);">${n.diaSolicitado?_notaFmtData(n.diaSolicitado):''}</div>
+        ${n.status==='emitida'&&n.numeroNota?`<div style="font-size:11px;color:var(--green);margin-top:3px;">nº ${_escP(n.numeroNota)}</div>`:''}
+      </div>
+    </div>
+    ${corpo}
+  </div>`;
+}
+function renderNotasEmpresa(col){
+  const wrap=document.createElement('div');wrap.className='ficha-wrap';
+  const lista=notasDem.filter(n=>n.empresa===empresaAtual).sort((a,b)=>{
+    const af=(a.status!=='pendente')?1:0,bf=(b.status!=='pendente')?1:0; if(af!==bf)return af-bf;
+    return (a.diaSolicitado||'9999').localeCompare(b.diaSolicitado||'9999');
+  });
+  const podeEditar=_podePedirNota(), podeEmitir=_podeEmitirNota();
+  const form=(_notaEditando&&podeEditar)?_notaForm():'';
+  const emN=(_notaEmitindo&&podeEmitir)?notasDem.find(x=>x.id===_notaEmitindo&&x.empresa===empresaAtual):null;
+  const emitForm=emN?_notaEmitForm(emN):'';
+  wrap.innerHTML=`
+    <div class="ficha-section">
+      <div class="ficha-section-titulo" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <span>🧾 Notas para o Uriel emitir</span>
+        ${podeEditar?`<button class="rel-btn" onclick="novaNota()" style="font-size:12px;padding:5px 10px;">+ Novo pedido</button>`:''}
+      </div>
+      ${podeEditar?'':'<div style="font-size:12px;color:var(--muted);margin:4px 0 8px;">Os pedidos são lançados pelo fiscal / gestão.</div>'}
+      ${form}${emitForm}
+      <div style="margin-top:8px;">${lista.length?lista.map(n=>_notaCard(n,{podeEmitir,podeEditar,showEmpresa:false})).join(''):'<div class="vazio" style="padding:18px;">Nenhum pedido de nota para esta empresa ainda.</div>'}</div>
+    </div>`;
+  col.appendChild(wrap);
 }
 function renderNotasFiscais(){
   const el=document.getElementById('painel-notasfiscais'); if(!el)return;
-  el.innerHTML=_telaEmPreparacao('🧾 Notas Fiscais Emitidas',
-    'Aqui você vai controlar a emissão de notas das empresas específicas da lista.<br><br>Estamos montando esta tela com você. Em breve disponível.');
+  const hoje=_hojeYMD(); const mesCur=hoje.slice(0,7);
+  let pend=0,praHoje=0,atras=0,emitMes=0;
+  notasDem.forEach(n=>{
+    if(n.status==='pendente'){pend++; if(n.diaSolicitado===hoje)praHoje++; if(_notaAtrasada(n))atras++;}
+    if(n.status==='emitida'&&(n.dataEmissao||'').slice(0,7)===mesCur)emitMes++;
+  });
+  const emN=(_notaEmitindo&&_podeEmitirNota())?notasDem.find(x=>x.id===_notaEmitindo):null;
+  const emitForm=emN?_notaEmitForm(emN):'';
+  el.innerHTML=`
+    <div class="rel-titulo">🧾 Notas Fiscais a Emitir</div>
+    <div class="rel-sub">Pedidos do fiscal — emita e registre o número e a data da nota.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:14px 0;">
+      ${_socMetrica('Pendentes',pend,'')}
+      ${_socMetrica('Para hoje',praHoje,'#d97706')}
+      ${_socMetrica('Atrasadas',atras,'#dc2626')}
+      ${_socMetrica('Emitidas no mês',emitMes,'#16a34a')}
+    </div>
+    <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center;">
+      <select class="ficha-input" style="max-width:200px;" onchange="_notaFiltroStatus=this.value;renderNotaLista()">
+        <option value="">Todos os status</option>
+        ${NOTA_STATUS.map(s=>`<option value="${s[0]}"${_notaFiltroStatus===s[0]?' selected':''}>${s[1]}</option>`).join('')}
+      </select>
+      <input class="ficha-input" placeholder="🔍 Buscar empresa, cliente, nº..." value="${_escAttrP(_notaBusca)}" oninput="_notaBusca=this.value;renderNotaLista()" style="max-width:260px;"/>
+      <span style="font-size:12px;color:var(--muted);">${notasDem.length} pedido(s)</span>
+    </div>
+    ${emitForm}
+    <div id="nota-lista"></div>`;
+  renderNotaLista();
+}
+function renderNotaLista(){
+  const cont=document.getElementById('nota-lista'); if(!cont)return;
+  const b=(_notaBusca||'').toLowerCase().trim();
+  let lista=notasDem.filter(n=>{
+    if(_notaFiltroStatus && n.status!==_notaFiltroStatus)return false;
+    if(b && !((n.empresa||'')+' '+(n.cliente||'')+' '+(n.descricao||'')+' '+(n.numeroNota||'')).toLowerCase().includes(b))return false;
+    return true;
+  });
+  lista.sort((a,b2)=>{
+    const af=(a.status!=='pendente')?1:0,bf=(b2.status!=='pendente')?1:0; if(af!==bf)return af-bf;
+    const aa=_notaAtrasada(a)?0:1,ba=_notaAtrasada(b2)?0:1; if(aa!==ba)return aa-ba;
+    return (a.diaSolicitado||'9999-99-99').localeCompare(b2.diaSolicitado||'9999-99-99');
+  });
+  cont.innerHTML=lista.length?lista.map(n=>_notaCard(n,{podeEmitir:_podeEmitirNota(),podeEditar:_podePedirNota(),showEmpresa:true})).join(''):'<div class="vazio" style="padding:26px;text-align:center;">'+((_notaFiltroStatus||b)?'Nenhum pedido com esse filtro.':'Nenhum pedido ainda.')+'</div>';
 }
 // ============ fim Telas do Uriel ============
 
@@ -3615,6 +3924,12 @@ function renderBancos(col){
             <option value="naoseaplica"${st==='naoseaplica'?' selected':''}>— N/A</option>
           </select>
           ${podeEditar?`<button class="banco-del" onclick="editarBanco('${b.id}')" title="Editar">✎</button>${isGestora()?`<button class="banco-del" onclick="deletarBanco('${b.id}')" title="Remover">✕</button>`:''}`:''}
+        </div>`;
+      const rec=_bmRec(empresaAtual,mesAtual,b.id);
+      bancosHtml+=`<div class="banco-mes-ctrl" style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:2px 10px 12px 56px;font-size:12px;border-bottom:1px solid var(--border);margin-bottom:6px;">
+          <span style="color:var(--muted);">Controle ${mesLabel(mesAtual)}:</span>
+          <label style="cursor:pointer;display:flex;gap:5px;align-items:center;color:${rec.ext?'var(--green)':'var(--text2)'};font-weight:${rec.ext?'600':'400'};"><input type="checkbox" ${rec.ext?'checked':''} onchange="toggleBancoMes('${b.id}','ext')"/> 📩 extrato recebido</label>
+          <label style="cursor:pointer;display:flex;gap:5px;align-items:center;color:${rec.imp?'var(--green)':'var(--text2)'};font-weight:${rec.imp?'600':'400'};"><input type="checkbox" ${rec.imp?'checked':''} onchange="toggleBancoMes('${b.id}','imp')"/> 💾 importado no sistema</label>
         </div>`;
     });
     bancosHtml+='</div>';
