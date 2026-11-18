@@ -1583,6 +1583,15 @@ function trocarView(v,btn){
 
 function renderMembros(){
   const el=document.getElementById('lista-membros');el.innerHTML='';
+  // Atalho da gestora: controle consolidado das Notas Fiscais (fica DENTRO do Fiscal)
+  if(isGestora()){
+    const bn=document.createElement('button');
+    bn.innerHTML='🧾 Controle de Notas Fiscais';
+    bn.title='Ver todas as notas emitidas e pendentes (resumo por empresa)';
+    bn.style.cssText='width:100%;margin-bottom:12px;padding:11px 12px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-weight:600;font-size:12.5px;cursor:pointer;text-align:left;line-height:1.3;';
+    bn.onclick=()=>trocarView('notasfiscais');
+    el.appendChild(bn);
+  }
   // gestora vê todos os membros; quem é do fiscal vê só a si mesmo
   const visiveis = isGestora() ? MEMBROS_FISCAL : MEMBROS_FISCAL.filter(m=>m.id===usuarioAtual);
   visiveis.forEach(m=>{
@@ -3047,7 +3056,30 @@ function renderNotasFiscais(){
   });
   const emN=(_notaEmitindo&&_podeEmitirNota())?notasDem.find(x=>x.id===_notaEmitindo):null;
   const emitForm=emN?_notaEmitForm(emN):'';
+  // Resumo por empresa (notas emitidas no mês corrente) — p/ fechar o total e mandar ao financeiro
+  const _fmtBRL=v=>Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const _emitMesList=notasDem.filter(n=>n.status==='emitida' && (n.dataEmissao||'').slice(0,7)===mesCur);
+  const _porEmp={};
+  _emitMesList.forEach(n=>{ const e=n.empresa||'—'; if(!_porEmp[e])_porEmp[e]={q:0,v:0}; _porEmp[e].q++; _porEmp[e].v+=(Number(n.valor)||0); });
+  const _empsOrd=Object.keys(_porEmp).sort((a,b)=>_porEmp[b].q-_porEmp[a].q || a.localeCompare(b));
+  const _totV=_emitMesList.reduce((s,n)=>s+(Number(n.valor)||0),0);
+  let resumoHtml='';
+  if(_empsOrd.length){
+    resumoHtml=`<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin:4px 0 14px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px;">📊 Resumo por empresa — emitidas em ${mesLabel(mesCur)}</div>
+      <div style="font-size:13px;">
+        ${_empsOrd.map(e=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);">
+          <span>${e}</span>
+          <span style="white-space:nowrap;color:var(--muted);"><b style="color:var(--text);">${_porEmp[e].q}</b> nota${_porEmp[e].q>1?'s':''} · R$ ${_fmtBRL(_porEmp[e].v)}</span>
+        </div>`).join('')}
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:9px 0 2px;font-weight:700;">
+          <span>Total</span><span style="white-space:nowrap;">${_emitMesList.length} nota${_emitMesList.length>1?'s':''} · R$ ${_fmtBRL(_totV)}</span>
+        </div>
+      </div>
+    </div>`;
+  }
   el.innerHTML=`
+    ${isGestora()?`<button onclick="trocarView('fiscal')" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:0 0 10px;">← Voltar ao Setor Fiscal</button>`:''}
     <div class="rel-titulo">🧾 Notas Fiscais a Emitir</div>
     <div class="rel-sub">Pedidos do fiscal — emita e registre o número e a data da nota.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:14px 0;">
@@ -3056,6 +3088,7 @@ function renderNotasFiscais(){
       ${_socMetrica('Atrasadas',atras,'#dc2626')}
       ${_socMetrica('Emitidas no mês',emitMes,'#16a34a')}
     </div>
+    ${resumoHtml}
     <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center;">
       <select class="ficha-input" style="max-width:200px;" onchange="_notaFiltroStatus=this.value;renderNotaLista()">
         <option value="">Todos os status</option>
