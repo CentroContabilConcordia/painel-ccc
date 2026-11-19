@@ -2957,11 +2957,13 @@ function _notaForm(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div><label style="${L}">Cliente / destinatário *</label><input class="ficha-input" id="nota-cliente" value="${_escAttrP(n.cliente||'')}" placeholder="Para quem é a nota"/></div>
       <div><label style="${L}">CNPJ/CPF do cliente</label><input class="ficha-input" id="nota-clientedoc" value="${_escAttrP(n.clienteDoc||'')}" placeholder="opcional"/></div>
-      <div><label style="${L}">Tipo da nota</label><select class="ficha-input" id="nota-tipo">${NOTA_TIPOS.map(t=>`<option value="${t[0]}"${(n.tipo||'nfe')===t[0]?' selected':''}>${t[1]}</option>`).join('')}</select></div>
+      <div><label style="${L}">Tipo da nota</label><select class="ficha-input" id="nota-tipo" onchange="_notaTipoMudou()">${NOTA_TIPOS.map(t=>`<option value="${t[0]}"${(n.tipo||'nfe')===t[0]?' selected':''}>${t[1]}</option>`).join('')}</select></div>
       <div><label style="${L}">Natureza (se NF-e)</label><select class="ficha-input" id="nota-natureza"><option value="">—</option>${NOTA_NATUREZAS.map(x=>`<option${n.natureza===x?' selected':''}>${x}</option>`).join('')}</select></div>
       <div style="grid-column:1/3;"><label style="${L}">Descrição do item / serviço</label><textarea class="ficha-input" id="nota-desc" rows="2">${_escP(n.descricao||'')}</textarea></div>
-      ${_servCampo('ctn','CTN — Código de Tributação Nacional',n)}
-      ${_servCampo('nbs','NBS — Nomenclatura Brasileira de Serviços',n)}
+      <div id="nota-serv-campos" style="grid-column:1/3;display:${((n.tipo||'nfe')==='nfse')?'grid':'none'};grid-template-columns:1fr 1fr;gap:10px;">
+        ${_servCampo('ctn','CTN — Código de Tributação Nacional',n)}
+        ${_servCampo('nbs','NBS — Nomenclatura Brasileira de Serviços',n)}
+      </div>
       <div><label style="${L}">Quantidade</label><input class="ficha-input" id="nota-qtd" value="${_escAttrP(n.quantidade||'')}" placeholder="ex.: 1"/></div>
       <div><label style="${L}">Valor</label><input class="ficha-input" id="nota-valor" value="${_escAttrP(n.valor||'')}" placeholder="ex.: 1.500,00"/></div>
       <div><label style="${L}">Forma de pagamento</label><select class="ficha-input" id="nota-forma"><option value="">—</option>${NOTA_FORMAS.map(x=>`<option${n.formaPgto===x?' selected':''}>${x}</option>`).join('')}</select></div>
@@ -2990,6 +2992,11 @@ function _notaEmitForm(n){
     </div>
   </div>`;
 }
+function _notaTipoMudou(){
+  const t=((document.getElementById('nota-tipo')||{}).value)||'nfe';
+  const box=document.getElementById('nota-serv-campos');
+  if(box)box.style.display=(t==='nfse')?'grid':'none';
+}
 function novaNota(){ if(!_podePedirNota())return; _ensureTabServico(); _notaEditando='novo'; _notaEmitindo=null; _reRenderNotas(); setTimeout(()=>document.getElementById('nota-cliente')?.focus(),30); }
 function editarNota(id){ if(!_podePedirNota())return; _ensureTabServico(); _notaEditando=id; _notaEmitindo=null; _reRenderNotas(); }
 function cancelarNotaForm(){ _notaEditando=null; _reRenderNotas(); }
@@ -3006,11 +3013,14 @@ async function salvarNota(){
     descricao:(g('nota-desc').value||'').trim(), quantidade:(g('nota-qtd').value||'').trim(),
     valor:(g('nota-valor').value||'').trim(), formaPgto:g('nota-forma').value||'',
     diaSolicitado:g('nota-dia').value||_hojeYMD(), obs:(g('nota-obs').value||'').trim(),
-    ctn:((g('nota-ctn')||{}).value||'').trim()||((g('nota-ctn-busca')||{}).value||'').trim(),
-    ctnDesc:((g('nota-ctn-desc')||{}).value||'').trim(),
-    nbs:((g('nota-nbs')||{}).value||'').trim()||((g('nota-nbs-busca')||{}).value||'').trim(),
-    nbsDesc:((g('nota-nbs-desc')||{}).value||'').trim(),
   };
+  // CTN/NBS só valem para serviço (NFS-e); em NF-e ficam vazios
+  if(campos.tipo==='nfse'){
+    campos.ctn=((g('nota-ctn')||{}).value||'').trim()||((g('nota-ctn-busca')||{}).value||'').trim();
+    campos.ctnDesc=((g('nota-ctn-desc')||{}).value||'').trim();
+    campos.nbs=((g('nota-nbs')||{}).value||'').trim()||((g('nota-nbs-busca')||{}).value||'').trim();
+    campos.nbsDesc=((g('nota-nbs-desc')||{}).value||'').trim();
+  } else { campos.ctn=''; campos.ctnDesc=''; campos.nbs=''; campos.nbsDesc=''; }
   if(!campos.cliente){toast('Informe o cliente / destinatário','#d97706');return;}
   if(editing){ const n=notasDem.find(x=>x.id===_notaEditando); if(n)Object.assign(n,campos,{atualizadoEm:Date.now()}); }
   else { notasDem.push(Object.assign({id:'nota_'+Date.now(),status:'pendente',solicitante:usuarioAtual,criadoEm:Date.now(),historico:[{em:_hojeYMD(),de:'',para:'pendente',por:usuarioAtual}]},campos)); }
