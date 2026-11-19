@@ -3113,6 +3113,7 @@ function _notaCard(n,opts){
           <span style="font-size:11px;background:${sc}22;color:${sc};padding:2px 8px;border-radius:5px;">${_notaStatusLabel(n.status)}</span>
           ${atras?`<span style="font-size:11px;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:5px;">⚠ Atrasada</span>`:praHoje?`<span style="font-size:11px;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:5px;">⏰ Para hoje</span>`:''}
           ${n.valor?`<span style="font-size:11px;color:var(--muted);">R$ ${_escP(n.valor)}</span>`:''}
+          ${(()=>{const su=n.solicitante&&USUARIOS[n.solicitante]?USUARIOS[n.solicitante]:null;return su?`<span style="font-size:11px;color:${su.cor};font-weight:600;">👤 ${_escP(su.nome)}</span>`:(n.solicitante?`<span style="font-size:11px;color:var(--muted);">👤 ${_escP(n.solicitante)}</span>`:'');})()}
         </div>
       </div>
       <div style="text-align:right;flex:none;">
