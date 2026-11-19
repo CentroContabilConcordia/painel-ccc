@@ -2888,6 +2888,65 @@ function _notaAtrasada(n){ return n.status==='pendente' && n.diaSolicitado && n.
 function _reRenderNotas(){ if(viewAtual==='notasfiscais')renderNotasFiscais(); else if(empresaAtual&&abaEmpresa==='notas')renderTarefas(); }
 function toggleNotaExp(id){ _notaExp=_notaExp===id?null:id; _reRenderNotas(); }
 
+// ----- Tabelas de serviço (CTN / NBS) com busca; carregam só quando o pedido abre -----
+let _tabServico=null; let _servRes={ctn:[],nbs:[]};
+async function _ensureTabServico(){
+  if(_tabServico)return _tabServico;
+  try{ const r=await fetch('dados/tabelas-servico.json',{cache:'force-cache'}); _tabServico=await r.json(); }
+  catch(e){ _tabServico={ctn:[],nbs:[]}; console.warn('[CCC] falha ao carregar tabelas de serviço',e); }
+  return _tabServico;
+}
+function _servDig(s){ return (s||'').toString().replace(/\D/g,''); }
+function _servFilter(kind,q){
+  const data=(_tabServico&&_tabServico[kind])||[];
+  q=(q||'').trim(); if(!q)return [];
+  const qd=_servDig(q), ql=q.toLowerCase();
+  const pre=[],con=[],txt=[];
+  for(let k=0;k<data.length;k++){
+    const it=data[k]; const cd=_servDig(it.c);
+    if(qd){
+      if(cd.indexOf(qd)===0){ pre.push(it); if(pre.length>=40)break; continue; }
+      if(cd.indexOf(qd)>=0){ if(con.length<40)con.push(it); continue; }
+    }
+    if(ql.length>=3 && (it.d||'').toLowerCase().indexOf(ql)>=0){ if(txt.length<40)txt.push(it); }
+  }
+  return pre.concat(con,txt).slice(0,40);
+}
+function _servInput(kind,el){
+  const drop=document.getElementById('nota-'+kind+'-drop'); if(!drop)return;
+  const q=el.value||'';
+  const h=document.getElementById('nota-'+kind), hd=document.getElementById('nota-'+kind+'-desc');
+  if(h)h.value=''; if(hd)hd.value=''; // ao digitar, invalida seleção anterior
+  if(!_tabServico){ drop.style.display='block'; drop.innerHTML='<div style="padding:8px 10px;color:var(--muted);font-size:12px;">Carregando tabela…</div>'; _ensureTabServico().then(()=>{ if(document.activeElement===el)_servInput(kind,el); }); return; }
+  if(!q.trim()){ drop.style.display='none'; return; }
+  const res=_servFilter(kind,q); _servRes[kind]=res;
+  if(!res.length){ drop.style.display='block'; drop.innerHTML='<div style="padding:8px 10px;color:var(--muted);font-size:12px;">Nada encontrado.</div>'; return; }
+  drop.innerHTML=res.map((it,i)=>`<div onmousedown="_servPick('${kind}',${i})" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12.5px;line-height:1.3;" onmouseover="this.style.background='var(--surface3)'" onmouseout="this.style.background=''"><b>${_escP(it.c)}</b> — ${_escP(it.d)}</div>`).join('');
+  drop.style.display='block';
+}
+function _servPick(kind,i){
+  const it=(_servRes[kind]||[])[i]; if(!it)return;
+  const b=document.getElementById('nota-'+kind+'-busca'), h=document.getElementById('nota-'+kind), hd=document.getElementById('nota-'+kind+'-desc');
+  if(h)h.value=it.c; if(hd)hd.value=it.d; if(b)b.value=it.c+' — '+it.d;
+  _servHide(kind);
+}
+function _servHide(kind){ const d=document.getElementById('nota-'+kind+'-drop'); if(d)d.style.display='none'; }
+function _servClear(kind){ ['-busca','','-desc'].forEach(s=>{ const e=document.getElementById('nota-'+kind+s); if(e)e.value=''; }); _servHide(kind); }
+function _servCampo(kind,label,n){
+  const L='display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;';
+  const cod=(n&&n[kind])||'', desc=(n&&n[kind+'Desc'])||'';
+  const disp=cod?(cod+(desc?' — '+desc:'')):'';
+  return `<div style="position:relative;">
+    <label style="${L}">${label}</label>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input class="ficha-input" id="nota-${kind}-busca" value="${_escAttrP(disp)}" placeholder="digite o número ou o nome" autocomplete="off" style="flex:1;" oninput="_servInput('${kind}',this)" onfocus="_servInput('${kind}',this)" onblur="setTimeout(()=>_servHide('${kind}'),170)"/>
+      <button type="button" class="btn-copia-num" title="Limpar" onclick="_servClear('${kind}')" style="flex:none;">✕</button>
+    </div>
+    <input type="hidden" id="nota-${kind}" value="${_escAttrP(cod)}"/>
+    <input type="hidden" id="nota-${kind}-desc" value="${_escAttrP(desc)}"/>
+    <div id="nota-${kind}-drop" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:60;background:var(--card);border:1px solid var(--border);border-radius:8px;max-height:240px;overflow:auto;box-shadow:0 6px 18px rgba(0,0,0,.12);margin-top:2px;"></div>
+  </div>`;
+}
 function _notaForm(){
   const editing=_notaEditando && _notaEditando!=='novo';
   const n=editing?(notasDem.find(x=>x.id===_notaEditando)||{}):{};
@@ -2901,6 +2960,8 @@ function _notaForm(){
       <div><label style="${L}">Tipo da nota</label><select class="ficha-input" id="nota-tipo">${NOTA_TIPOS.map(t=>`<option value="${t[0]}"${(n.tipo||'nfe')===t[0]?' selected':''}>${t[1]}</option>`).join('')}</select></div>
       <div><label style="${L}">Natureza (se NF-e)</label><select class="ficha-input" id="nota-natureza"><option value="">—</option>${NOTA_NATUREZAS.map(x=>`<option${n.natureza===x?' selected':''}>${x}</option>`).join('')}</select></div>
       <div style="grid-column:1/3;"><label style="${L}">Descrição do item / serviço</label><textarea class="ficha-input" id="nota-desc" rows="2">${_escP(n.descricao||'')}</textarea></div>
+      ${_servCampo('ctn','CTN — Código de Tributação Nacional',n)}
+      ${_servCampo('nbs','NBS — Nomenclatura Brasileira de Serviços',n)}
       <div><label style="${L}">Quantidade</label><input class="ficha-input" id="nota-qtd" value="${_escAttrP(n.quantidade||'')}" placeholder="ex.: 1"/></div>
       <div><label style="${L}">Valor</label><input class="ficha-input" id="nota-valor" value="${_escAttrP(n.valor||'')}" placeholder="ex.: 1.500,00"/></div>
       <div><label style="${L}">Forma de pagamento</label><select class="ficha-input" id="nota-forma"><option value="">—</option>${NOTA_FORMAS.map(x=>`<option${n.formaPgto===x?' selected':''}>${x}</option>`).join('')}</select></div>
@@ -2929,8 +2990,8 @@ function _notaEmitForm(n){
     </div>
   </div>`;
 }
-function novaNota(){ if(!_podePedirNota())return; _notaEditando='novo'; _notaEmitindo=null; _reRenderNotas(); setTimeout(()=>document.getElementById('nota-cliente')?.focus(),30); }
-function editarNota(id){ if(!_podePedirNota())return; _notaEditando=id; _notaEmitindo=null; _reRenderNotas(); }
+function novaNota(){ if(!_podePedirNota())return; _ensureTabServico(); _notaEditando='novo'; _notaEmitindo=null; _reRenderNotas(); setTimeout(()=>document.getElementById('nota-cliente')?.focus(),30); }
+function editarNota(id){ if(!_podePedirNota())return; _ensureTabServico(); _notaEditando=id; _notaEmitindo=null; _reRenderNotas(); }
 function cancelarNotaForm(){ _notaEditando=null; _reRenderNotas(); }
 async function salvarNota(){
   if(!_podePedirNota()){toast('Sem permissão','#dc2626');return;}
@@ -2945,6 +3006,10 @@ async function salvarNota(){
     descricao:(g('nota-desc').value||'').trim(), quantidade:(g('nota-qtd').value||'').trim(),
     valor:(g('nota-valor').value||'').trim(), formaPgto:g('nota-forma').value||'',
     diaSolicitado:g('nota-dia').value||_hojeYMD(), obs:(g('nota-obs').value||'').trim(),
+    ctn:((g('nota-ctn')||{}).value||'').trim()||((g('nota-ctn-busca')||{}).value||'').trim(),
+    ctnDesc:((g('nota-ctn-desc')||{}).value||'').trim(),
+    nbs:((g('nota-nbs')||{}).value||'').trim()||((g('nota-nbs-busca')||{}).value||'').trim(),
+    nbsDesc:((g('nota-nbs-desc')||{}).value||'').trim(),
   };
   if(!campos.cliente){toast('Informe o cliente / destinatário','#d97706');return;}
   if(editing){ const n=notasDem.find(x=>x.id===_notaEditando); if(n)Object.assign(n,campos,{atualizadoEm:Date.now()}); }
@@ -3001,6 +3066,10 @@ function _notaCard(n,opts){
         ${n.natureza?`<span>Natureza: ${_escP(n.natureza)}</span>`:''}
         ${n.diaSolicitado?`<span>Solicitado p/: ${_notaFmtData(n.diaSolicitado)}</span>`:''}
       </div>
+      ${(n.ctn||n.nbs)?`<div style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--text2);margin-bottom:8px;">
+        ${n.ctn?`<span><b>CTN:</b> ${_escP(n.ctn)}${n.ctnDesc?' — '+_escP(n.ctnDesc):''}</span>`:''}
+        ${n.nbs?`<span><b>NBS:</b> ${_escP(n.nbs)}${n.nbsDesc?' — '+_escP(n.nbsDesc):''}</span>`:''}
+      </div>`:''}
       ${n.obs?`<div style="font-size:12px;margin-bottom:6px;"><b>Obs:</b> ${_escP(n.obs)}</div>`:''}
       ${n.status==='emitida'?`<div style="font-size:12px;margin:6px 0;color:var(--green);"><b>✅ Emitida</b> — nº ${_escP(n.numeroNota||'')}${n.dataEmissao?' em '+_notaFmtData(n.dataEmissao):''}${n.emitidoPor&&USUARIOS[n.emitidoPor]?' por '+_escP(USUARIOS[n.emitidoPor].nome):''}${n.obsEmissao?' · '+_escP(n.obsEmissao):''}</div>`:''}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
