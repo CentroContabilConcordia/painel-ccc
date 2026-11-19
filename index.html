@@ -823,7 +823,7 @@ let bancosMes={}; // bancosMes[empresa][mesKey][contaId] = {ext:0/1, imp:0/1}
 let _bmMes=null; let _bmBusca=''; let _bmSoPend=false; let _bmFlat=[];
 // Notas Fiscais — modelo de DEMANDA: a menina do fiscal pede (dentro da empresa) → o Uriel emite.
 const SK_NOTAS='ccc_notas_v1';
-let notasDem=[]; let _notaEditando=null; let _notaEmitindo=null; let _notaFiltroStatus=''; let _notaBusca=''; let _notaExp=null;
+let notasDem=[]; let _notaEditando=null; let _notaEmitindo=null; let _notaFiltroStatus=''; let _notaBusca=''; let _notaExp=null; let _notaDup=null;
 const NOTA_TIPOS=[['nfe','NF-e (produto)'],['nfse','NFS-e (serviço)']];
 const NOTA_NATUREZAS=['Venda','Remessa','Devolução','Bonificação','Transferência','Industrialização','Outra'];
 const NOTA_FORMAS=['À vista','A prazo','PIX','Boleto','Cartão','Dinheiro','Transferência','Outra'];
@@ -2949,11 +2949,11 @@ function _servCampo(kind,label,n){
 }
 function _notaForm(){
   const editing=_notaEditando && _notaEditando!=='novo';
-  const n=editing?(notasDem.find(x=>x.id===_notaEditando)||{}):{};
-  const emp=editing?(n.empresa||''):empresaAtual;
+  const n=editing?(notasDem.find(x=>x.id===_notaEditando)||{}):(_notaDup||{}); // cópia pré-preenche o novo
+  const emp=editing?(n.empresa||''):((_notaDup&&_notaDup.empresa)||empresaAtual);
   const L='display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;';
   return `<div class="rel-filtros-card" style="margin-bottom:16px;">
-    <div class="rel-filtros-titulo">${editing?'Editar pedido de nota':'Novo pedido de nota'} — ${_escP(emp)}</div>
+    <div class="rel-filtros-titulo">${editing?'Editar pedido de nota':(_notaDup?'Novo pedido de nota (cópia)':'Novo pedido de nota')} — ${_escP(emp)}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div><label style="${L}">Cliente / destinatário *</label><input class="ficha-input" id="nota-cliente" value="${_escAttrP(n.cliente||'')}" placeholder="Para quem é a nota"/></div>
       <div><label style="${L}">CNPJ/CPF do cliente</label><input class="ficha-input" id="nota-clientedoc" value="${_escAttrP(n.clienteDoc||'')}" placeholder="opcional"/></div>
@@ -2997,14 +2997,14 @@ function _notaTipoMudou(){
   const box=document.getElementById('nota-serv-campos');
   if(box)box.style.display=(t==='nfse')?'grid':'none';
 }
-function novaNota(){ if(!_podePedirNota())return; _ensureTabServico(); _notaEditando='novo'; _notaEmitindo=null; _reRenderNotas(); setTimeout(()=>document.getElementById('nota-cliente')?.focus(),30); }
-function editarNota(id){ if(!_podePedirNota())return; _ensureTabServico(); _notaEditando=id; _notaEmitindo=null; _reRenderNotas(); }
-function cancelarNotaForm(){ _notaEditando=null; _reRenderNotas(); }
+function novaNota(){ if(!_podePedirNota())return; _notaDup=null; _ensureTabServico(); _notaEditando='novo'; _notaEmitindo=null; _reRenderNotas(); setTimeout(()=>document.getElementById('nota-cliente')?.focus(),30); }
+function editarNota(id){ if(!_podePedirNota())return; _notaDup=null; _ensureTabServico(); _notaEditando=id; _notaEmitindo=null; _reRenderNotas(); }
+function cancelarNotaForm(){ _notaEditando=null; _notaDup=null; _reRenderNotas(); }
 async function salvarNota(){
   if(!_podePedirNota()){toast('Sem permissão','#dc2626');return;}
   const g=id=>document.getElementById(id);
   const editing=_notaEditando && _notaEditando!=='novo';
-  const emp=editing?((notasDem.find(x=>x.id===_notaEditando)||{}).empresa):empresaAtual;
+  const emp=editing?((notasDem.find(x=>x.id===_notaEditando)||{}).empresa):((_notaDup&&_notaDup.empresa)||empresaAtual);
   if(!emp){toast('Abra uma empresa para lançar o pedido','#d97706');return;}
   const campos={
     empresa:emp,
@@ -3024,8 +3024,18 @@ async function salvarNota(){
   if(!campos.cliente){toast('Informe o cliente / destinatário','#d97706');return;}
   if(editing){ const n=notasDem.find(x=>x.id===_notaEditando); if(n)Object.assign(n,campos,{atualizadoEm:Date.now()}); }
   else { notasDem.push(Object.assign({id:'nota_'+Date.now(),status:'pendente',solicitante:usuarioAtual,criadoEm:Date.now(),historico:[{em:_hojeYMD(),de:'',para:'pendente',por:usuarioAtual}]},campos)); }
-  _notaEditando=null;
+  _notaEditando=null; _notaDup=null;
   await saveNotas(); _reRenderNotas(); toast('✓ Pedido salvo!');
+}
+function duplicarNota(id){
+  if(!_podePedirNota()){toast('Sem permissão','#dc2626');return;}
+  const s=notasDem.find(x=>x.id===id); if(!s)return;
+  _notaDup={ empresa:s.empresa, cliente:s.cliente||'', clienteDoc:s.clienteDoc||'', tipo:s.tipo||'nfe',
+    natureza:s.natureza||'', descricao:s.descricao||'', quantidade:s.quantidade||'', valor:s.valor||'',
+    formaPgto:s.formaPgto||'', obs:s.obs||'', ctn:s.ctn||'', ctnDesc:s.ctnDesc||'', nbs:s.nbs||'', nbsDesc:s.nbsDesc||'',
+    diaSolicitado:_hojeYMD() };
+  _ensureTabServico(); _notaEditando='novo'; _notaEmitindo=null; _reRenderNotas();
+  setTimeout(()=>document.getElementById('nota-cliente')?.focus(),30);
 }
 function emitirNota(id){ if(!_podeEmitirNota()){toast('Sem permissão','#dc2626');return;} _notaEmitindo=id; _notaEditando=null; _reRenderNotas(); setTimeout(()=>document.getElementById('nota-numero')?.focus(),30); }
 function cancelarEmissao(){ _notaEmitindo=null; _reRenderNotas(); }
@@ -3085,6 +3095,7 @@ function _notaCard(n,opts){
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
         ${(n.status==='pendente'&&opts.podeEmitir)?`<button class="rel-btn" onclick="emitirNota('${n.id}')">✅ Registrar emissão</button>`:''}
         ${(n.status==='pendente'&&opts.podeEditar)?`<button class="tfiltro-btn" onclick="editarNota('${n.id}')">✏️ Editar</button>`:''}
+        ${_podePedirNota()?`<button class="tfiltro-btn" onclick="duplicarNota('${n.id}')" title="Criar um novo pedido igual a este">📋 Duplicar</button>`:''}
         ${(n.status!=='cancelada'&&n.status!=='emitida'&&(opts.podeEditar||isGestora()))?`<button class="tfiltro-btn" onclick="mudarStatusNota('${n.id}','cancelada')">🚫 Cancelar pedido</button>`:''}
         ${isGestora()?`<button class="btn-danger" onclick="excluirNota('${n.id}')" title="Excluir">🗑️</button>`:''}
       </div>
