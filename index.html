@@ -2834,33 +2834,42 @@ function renderBancosMes(){
     <div id="bm-lista"></div>`;
   renderBmLista();
 }
+function _bmChip(idx,field,on,label){
+  return `<label style="cursor:pointer;display:inline-flex;gap:8px;align-items:center;padding:8px 13px;border-radius:9px;border:2px solid ${on?'var(--green)':'var(--border)'};background:${on?'rgba(34,197,94,.10)':'transparent'};color:${on?'var(--green)':'var(--text2)'};font-weight:${on?'700':'500'};font-size:12.5px;white-space:nowrap;"><input type="checkbox" ${on?'checked':''} onchange="toggleBancoMesCons(${idx},'${field}')" style="width:18px;height:18px;cursor:pointer;accent-color:var(--green);margin:0;"/> ${label}</label>`;
+}
 function renderBmLista(){
   const cont=document.getElementById('bm-lista'); if(!cont)return;
   const mes=_bmMes; const b=(_bmBusca||'').toLowerCase().trim();
   _bmFlat=[];
   const emps=Object.keys(bancosCad||{}).filter(e=>(bancosCad[e]||[]).length).sort((a,b2)=>a.localeCompare(b2,'pt'));
-  let rows='';
+  let groups='';
   emps.forEach(emp=>{
     if(b && !emp.toLowerCase().includes(b))return;
-    const contas=bancosCad[emp]||[]; let buff=''; let shown=0;
+    const contas=bancosCad[emp]||[]; let cards=''; let shown=0;
     contas.forEach(c=>{
       const r=_bmRec(emp,mes,c.id);
       if(_bmSoPend && r.ext && r.imp)return;
       const idx=_bmFlat.length; _bmFlat.push({emp,cid:c.id});
       const det=[c.agencia?'Ag '+c.agencia:'',c.conta?'Cc '+c.conta:''].filter(Boolean).join(' · ');
-      buff+=`<tr style="border-top:1px solid var(--border);">
-        <td style="padding:7px 8px;">${_escP(c.nome)}${det?`<span style="color:var(--muted);font-size:11px;"> · ${_escP(det)}</span>`:''}</td>
-        <td style="padding:7px 8px;text-align:center;"><input type="checkbox" ${r.ext?'checked':''} onchange="toggleBancoMesCons(${idx},'ext')" style="cursor:pointer;transform:scale(1.2);"/></td>
-        <td style="padding:7px 8px;text-align:center;"><input type="checkbox" ${r.imp?'checked':''} onchange="toggleBancoMesCons(${idx},'imp')" style="cursor:pointer;transform:scale(1.2);"/></td>
-      </tr>`;
+      cards+=`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--card);">
+        <div style="flex:1 1 170px;min-width:150px;">
+          <div style="font-weight:600;font-size:13.5px;">${_escP(c.nome)}</div>
+          ${det?`<div style="color:var(--muted);font-size:11px;margin-top:1px;">${_escP(det)}</div>`:''}
+        </div>
+        <div style="display:flex;gap:9px;flex-wrap:wrap;">
+          ${_bmChip(idx,'ext',r.ext,'📩 Extrato recebido')}
+          ${_bmChip(idx,'imp',r.imp,'💾 Importado no sistema')}
+        </div>
+      </div>`;
       shown++;
     });
-    if(shown)rows+=`<tr><td colspan="3" style="padding:12px 8px 3px;font-weight:700;font-size:13px;color:var(--text);">${_escP(emp)}</td></tr>`+buff;
+    if(shown)groups+=`<div style="margin-bottom:18px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--text);">${_escP(emp)}</div>
+      ${cards}
+    </div>`;
   });
-  if(!rows){ cont.innerHTML='<div class="vazio" style="padding:26px;text-align:center;">'+(_bmSoPend?'Nada pendente neste mês. 🎉':'Nenhuma conta bancária cadastrada ainda.')+'</div>'; return; }
-  cont.innerHTML=`<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">
-    <thead><tr style="background:var(--surface3);"><th style="text-align:left;padding:8px;">Conta</th><th style="padding:8px;width:120px;">📩 Extrato<br><span style="font-weight:400;font-size:11px;color:var(--muted);">recebido</span></th><th style="padding:8px;width:120px;">💾 Importado<br><span style="font-weight:400;font-size:11px;color:var(--muted);">no sistema</span></th></tr></thead>
-    <tbody>${rows}</tbody></table></div>`;
+  if(!groups){ cont.innerHTML='<div class="vazio" style="padding:26px;text-align:center;">'+(_bmSoPend?'Nada pendente neste mês. 🎉':'Nenhuma conta bancária cadastrada ainda.')+'</div>'; return; }
+  cont.innerHTML=`<div style="max-width:880px;">${groups}</div>`;
 }
 async function toggleBancoMesCons(idx,field){
   const row=_bmFlat[idx]; if(!row)return;
