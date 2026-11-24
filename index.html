@@ -579,7 +579,7 @@ body.lateral header .logo{display:none;}
         <div class="tarefas-checkboxes" id="tarefas-checkboxes"></div>
       </div>
 
-      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:700;color:#4338ca;cursor:pointer;background:#fff3a3;padding:7px 12px;border-radius:7px;width:fit-content;">
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:700;color:var(--accent);cursor:pointer;background:var(--accent-light);padding:7px 12px;border-radius:7px;width:fit-content;">
         <input type="checkbox" id="rel-soLista" onchange="if(window._relData)gerarRelatorio()"> 📤 Só a lista de empresas (para enviar) — esconde os cards e as tabelas Por Pessoa/Por Tarefa
       </label>
 
@@ -2358,8 +2358,8 @@ function gerarRelatorio(){
   if(pessoaFiltro!=='todos')_sub.push(_nomePessoa(pessoaFiltro));
   if(regimeFiltro!=='todos')_sub.push('Regime: '+regimeFiltro);
   _sub.push('emitido '+new Date().toLocaleDateString('pt-BR'));
-  const titulo=`<div style="margin:0 0 14px;padding:11px 15px;background:#fff3a3;border-radius:8px;">`
-    +`<div style="font-size:16px;font-weight:700;color:#4338ca;">📋 ${_oque}${(statusFiltro!=='todos'&&_stMap[statusFiltro])?' — '+_stMap[statusFiltro]:''}</div>`
+  const titulo=`<div style="margin:0 0 14px;padding:11px 15px;background:var(--accent-light);border-radius:8px;">`
+    +`<div style="font-size:16px;font-weight:700;color:var(--accent);">📋 ${_oque}${(statusFiltro!=='todos'&&_stMap[statusFiltro])?' — '+_stMap[statusFiltro]:''}</div>`
     +`<div style="font-size:12px;color:#5f5e5a;margin-top:3px;">${_sub.join(' · ')}</div></div>`;
   const soLista=document.getElementById('rel-soLista')?.checked;
 
@@ -3780,7 +3780,7 @@ function renderRegimeImport(col){
       ${regimeHistHTML(ficha, podeEditar)}
       <div class="ficha-grid" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
         <div class="ficha-campo" style="grid-column:1/-1;">
-          <div style="display:inline-block;font-size:13px;font-weight:700;color:#4338ca;background:#fff3a3;padding:3px 12px;border-radius:5px;margin-bottom:9px;letter-spacing:.3px;">📥 IMPORTAÇÃO DOS ARQUIVOS (FISCAL)</div>
+          <div style="display:inline-block;font-size:13px;font-weight:700;color:var(--accent);background:var(--accent-light);padding:3px 12px;border-radius:5px;margin-bottom:9px;letter-spacing:.3px;">📥 IMPORTAÇÃO DOS ARQUIVOS (FISCAL)</div>
           <div style="display:flex;flex-wrap:wrap;gap:14px;">
             ${['Sped','Sintegra','XML','Automação Zen','Outro'].map(o=>`<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:${dis?'default':'pointer'};"><input type="checkbox" class="imp-chk" value="${o}" ${impSel.includes(o)?'checked':''} ${dis}/> ${o}</label>`).join('')}
           </div>
