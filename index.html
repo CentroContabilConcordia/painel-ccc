@@ -2863,10 +2863,20 @@ function renderBmLista(){
       </div>`;
       shown++;
     });
-    if(shown)groups+=`<div style="margin-bottom:18px;">
-      <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--text);">${_escP(emp)}</div>
-      ${cards}
-    </div>`;
+    if(shown){
+      // Quem procurar nessa empresa: responsável fiscal do mês + gestora (p/ o Uriel se reportar)
+      const _fo=ownerNoMes(emp,mes); const _fu=_fo&&USUARIOS[_fo]?USUARIOS[_fo]:null;
+      const _gf=getFicha(emp)||{}; const _gi=_gf.gestora; const _gu=_gi&&USUARIOS[_gi]?USUARIOS[_gi]:null;
+      const _parts=[];
+      if(_fu)_parts.push(`<span style="color:${_fu.cor};font-weight:600;">📊 Fiscal: ${_escP(_fu.nome)}</span>`);
+      if(_gu)_parts.push(`<span style="color:${_gu.cor};font-weight:600;">👤 Gestora: ${_escP(_gu.nome)}</span>`);
+      const _resp=_parts.length?`<div style="font-size:11.5px;margin:2px 0 9px;display:flex;gap:14px;flex-wrap:wrap;">${_parts.join('')}</div>`:'';
+      groups+=`<div style="margin-bottom:18px;">
+        <div style="font-weight:700;font-size:13px;color:var(--text);">${_escP(emp)}</div>
+        ${_resp}
+        ${cards}
+      </div>`;
+    }
   });
   if(!groups){ cont.innerHTML='<div class="vazio" style="padding:26px;text-align:center;">'+(_bmSoPend?'Nada pendente neste mês. 🎉':'Nenhuma conta bancária cadastrada ainda.')+'</div>'; return; }
   cont.innerHTML=`<div style="max-width:880px;">${groups}</div>`;
