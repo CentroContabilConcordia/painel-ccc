@@ -2480,12 +2480,35 @@ async function comprimirImagem(file){
 }
 async function uploadImagem(file, pasta){
   if(!window._sb) throw new Error('sem conexão');
-  const blob=await comprimirImagem(file);
-  const nome=pasta+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,8)+'.jpg';
-  const {error}=await window._sb.storage.from('imagens').upload(nome, blob, {contentType:'image/jpeg',upsert:false});
+  const isImg=/^image\//.test(file.type);
+  const blob=await comprimirImagem(file); // imagens -> jpeg; demais arquivos (pdf, word...) passam direto
+  let ext='jpg', ct='image/jpeg';
+  if(!isImg){
+    const m=(file.name||'').match(/\.([A-Za-z0-9]+)$/); ext=(m?m[1]:'bin').toLowerCase();
+    ct=file.type||'application/octet-stream';
+  }
+  const nome=pasta+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,8)+'.'+ext;
+  const {error}=await window._sb.storage.from('imagens').upload(nome, blob, {contentType:ct,upsert:false});
   if(error) throw error;
   const {data}=window._sb.storage.from('imagens').getPublicUrl(nome);
   return data.publicUrl;
+}
+// ---- Anexos: imagem OU arquivo (pdf, word, excel, etc.) ----
+const OBS_ACCEPT='image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx';
+function _anxU(a){ return (a&&typeof a==='object')?a.u:a; }
+function _anxN(a){ return (a&&typeof a==='object')?(a.n||''):''; }
+function _anxIsImg(a){ if(typeof a==='string')return true; const s=(_anxN(a)||_anxU(a)||''); return /\.(jpe?g|png|gif|webp|bmp|heic)$/i.test(s); }
+function _anxLabel(a){ const n=_anxN(a); if(n)return n; const u=_anxU(a)||''; const m=u.match(/\/([^\/?#]+)$/); return m?decodeURIComponent(m[1]):'arquivo'; }
+function _anxIcon(a){ const s=(_anxN(a)||_anxU(a)||'').toLowerCase();
+  if(/\.pdf$/.test(s))return '📕'; if(/\.(docx?|rtf|odt)$/.test(s))return '📘';
+  if(/\.(xlsx?|csv|ods)$/.test(s))return '📗'; if(/\.(pptx?|odp)$/.test(s))return '📙';
+  if(/\.(zip|rar|7z)$/.test(s))return '🗜️'; return '📎'; }
+function _anxChip(a, removeJs, sz){
+  const u=_anxU(a); sz=sz||150;
+  if(_anxIsImg(a)){
+    return `<span style="position:relative;display:inline-block;"><img src="${u}" loading="lazy" style="max-width:${sz}px;max-height:${sz}px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/>${removeJs?`<button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="${removeJs}" title="Remover">✕</button>`:''}</span>`;
+  }
+  return `<span style="position:relative;display:inline-flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 11px 8px 10px;max-width:240px;cursor:pointer;" onclick="window.open('${u}','_blank')" title="Abrir ${_escAttrP(_anxLabel(a))}"><span style="font-size:18px;line-height:1;">${_anxIcon(a)}</span><span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_escP(_anxLabel(a))}</span>${removeJs?`<button class="obs-del" style="position:absolute;top:-7px;right:-7px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="event.stopPropagation();${removeJs}" title="Remover">✕</button>`:''}</span>`;
 }
 function renderProcessos(){
   const el=document.getElementById('painel-processos'); if(!el)return;
@@ -3477,11 +3500,11 @@ function obsBlocoHTML(ficha, titulo){
           <div class="obs-item" id="obs-${o.id}" style="flex-direction:column;align-items:stretch;">
             <div style="display:flex;align-items:flex-start;gap:6px;">
               <div class="obs-texto" style="flex:1;white-space:pre-wrap;">${_escP(o.texto)}</div>
-              ${isGestora()?`<button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar imagem">📷</button>
+              ${isGestora()?`<button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar arquivo">📎</button>
               <button class="obs-del" onclick="editarObs('${o.id}')" title="Editar">✎</button>
               <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>`:''}
             </div>
-            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" loading="lazy" style="max-width:150px;max-height:150px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.open('${u}','_blank')"/>${isGestora()?`<button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="removerImgObs('${o.id}',${ix})" title="Remover imagem">✕</button>`:''}</span>`).join('')}</div>`:''}
+            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((a,ix)=>_anxChip(a, isGestora()?`removerImgObs('${o.id}',${ix})`:'', 150)).join('')}</div>`:''}
           </div>`).join('')}
       </div>
       ${((USUARIOS[usuarioAtual]||{}).role==='societario')?'':`<div class="obs-add-row">
@@ -3489,7 +3512,7 @@ function obsBlocoHTML(ficha, titulo){
         <button class="obs-add-btn" onclick="adicionarObs()">Adicionar</button>
       </div>
       <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <label class="tfiltro-btn" style="cursor:pointer;">📷 Anexar imagem à próxima observação<input type="file" accept="image/*" style="display:none" onchange="anexarImgNova(this)"/></label>
+        <label class="tfiltro-btn" style="cursor:pointer;">📎 Anexar arquivo à próxima observação<input type="file" accept="${OBS_ACCEPT}" style="display:none" onchange="anexarImgNova(this)"/></label>
         <span id="obs-nova-imgs" style="display:flex;flex-wrap:wrap;gap:6px;"></span>
       </div>`}
     </div>`;
@@ -3980,25 +4003,25 @@ async function adicionarObs(){
 }
 function renderObsNovaImgs(){
   const el=document.getElementById('obs-nova-imgs'); if(!el)return;
-  el.innerHTML=_obsNovaImgs.map((u,ix)=>`<span style="position:relative;display:inline-block;"><img src="${u}" style="max-width:70px;max-height:70px;border-radius:5px;border:1px solid var(--border);"/><button class="obs-del" style="position:absolute;top:-6px;right:-6px;background:#fff;border-radius:50%;border:1px solid var(--border);" onclick="_obsNovaImgs.splice(${ix},1);renderObsNovaImgs()" title="Remover">✕</button></span>`).join('');
+  el.innerHTML=_obsNovaImgs.map((a,ix)=>_anxChip(a, `_obsNovaImgs.splice(${ix},1);renderObsNovaImgs()`, 70)).join('');
 }
 async function anexarImgNova(input){
   const f=input.files&&input.files[0]; if(!f)return; input.value='';
-  toast('Enviando imagem...');
-  try{ const url=await uploadImagem(f,'obs'); _obsNovaImgs.push(url); renderObsNovaImgs(); toast('✓ Imagem pronta (salva ao adicionar a observação)'); }
-  catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar imagem (o espaço de imagens já foi criado no Supabase?)','#dc2626'); }
+  toast('Enviando arquivo...');
+  try{ const url=await uploadImagem(f,'obs'); _obsNovaImgs.push({u:url,n:f.name}); renderObsNovaImgs(); toast('✓ Arquivo pronto (salvo ao adicionar a observação)'); }
+  catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar arquivo (verifique o tipo/limite do Supabase)','#dc2626'); }
 }
 async function anexarImgObs(obsId){
   if(!isGestora()){toast('Sem permissão — só gestora altera observação','#dc2626');return;}
-  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+  const inp=document.createElement('input'); inp.type='file'; inp.accept=OBS_ACCEPT;
   inp.onchange=async()=>{
     const f=inp.files&&inp.files[0]; if(!f)return;
-    toast('Enviando imagem...');
+    toast('Enviando arquivo...');
     try{
       const url=await uploadImagem(f,'obs');
       const ficha=getFicha(empresaAtual); const o=_obsList(ficha).find(x=>x.id===obsId);
-      if(o){ if(!o.imagens)o.imagens=[]; o.imagens.push(url); fichas[empresaAtual]=ficha; await saveFichas(); _reRenderObsHost(); toast('✓ Imagem anexada!'); }
-    }catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar imagem','#dc2626'); }
+      if(o){ if(!o.imagens)o.imagens=[]; o.imagens.push({u:url,n:f.name}); fichas[empresaAtual]=ficha; await saveFichas(); _reRenderObsHost(); toast('✓ Arquivo anexado!'); }
+    }catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar arquivo','#dc2626'); }
   };
   inp.click();
 }
