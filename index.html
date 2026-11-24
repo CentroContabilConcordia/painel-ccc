@@ -1593,7 +1593,7 @@ function trocarView(v,btn){
     document.getElementById('emp-busca').value='';empFiltro='';
     renderEmpresasContabil();
   } else {
-    colMembros.style.display='';
+    colMembros.style.display=(!isGestora()&&u.setor==='fiscal')?'none':''; // menina do fiscal vê só a si mesma: esconde a coluna Equipe e sobra espaço
     document.getElementById('col1-titulo').textContent='Equipe Fiscal';
     if(!isGestora()&&u.setor==='fiscal'){
       membroAtual=usuarioAtual;renderMembros();
