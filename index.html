@@ -142,6 +142,16 @@ body.lateral header .logo{display:none;}
 
 /* COL TAREFAS */
 .col-tarefas{flex:1;overflow-y:auto;display:flex;flex-direction:column;background:var(--bg);}
+/* Gestora no Setor Fiscal: equipe (meninas) numa faixa horizontal EM CIMA, liberando a coluna lateral */
+body.membros-topo #painel-operacional{flex-wrap:wrap;align-content:flex-start;}
+body.membros-topo #col-membros{order:-1;flex:0 0 100%;width:auto;max-width:none;height:70px;border-right:none;border-bottom:1px solid var(--border);padding:0 14px;display:flex;align-items:center;gap:12px;overflow-x:auto;overflow-y:hidden;}
+body.membros-topo #col-membros #col1-titulo{display:none;}
+body.membros-topo #col-membros #lista-membros{display:flex;flex-direction:row;align-items:center;gap:8px;flex:1;}
+body.membros-topo #col-membros #lista-membros>button{flex:none;white-space:nowrap;padding:7px 11px!important;font-size:12px;line-height:1.2;width:auto!important;margin:0!important;}
+body.membros-topo #col-membros .membro-btn{flex:none;margin-bottom:0;border:1.5px solid var(--border);background:var(--surface2);padding:5px 11px 5px 6px;}
+body.membros-topo #col-membros .membro-btn.active{border-color:var(--accent);background:var(--accent-light);}
+body.membros-topo #col-membros .membro-btn .mt{display:none;}
+body.membros-topo .col-empresas,body.membros-topo #col-tarefas{height:calc(100vh - 127px);}
 .col-tarefas::-webkit-scrollbar{width:4px;}
 .col-tarefas::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
 
@@ -1556,6 +1566,7 @@ async function iniciarApp(){
 function trocarView(v,btn){
   viewAtual=v;
   document.body.classList.remove('side-open');
+  document.body.classList.remove('membros-topo');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario'||v==='bancosmes'||v==='notasfiscais'||v==='esteira');
@@ -1594,6 +1605,7 @@ function trocarView(v,btn){
     renderEmpresasContabil();
   } else {
     colMembros.style.display=(!isGestora()&&u.setor==='fiscal')?'none':''; // menina do fiscal vê só a si mesma: esconde a coluna Equipe e sobra espaço
+    if(isGestora())document.body.classList.add('membros-topo'); // gestora: equipe (meninas) numa faixa horizontal em cima
     document.getElementById('col1-titulo').textContent='Equipe Fiscal';
     if(!isGestora()&&u.setor==='fiscal'){
       membroAtual=usuarioAtual;renderMembros();
@@ -1611,7 +1623,7 @@ function renderMembros(){
   // Atalho da gestora: controle consolidado das Notas Fiscais (fica DENTRO do Fiscal)
   if(isGestora()){
     const bn=document.createElement('button');
-    bn.innerHTML='🧾 Controle de Notas Fiscais';
+    bn.innerHTML='🧾 Notas Fiscais';
     bn.title='Ver todas as notas emitidas e pendentes (resumo por empresa)';
     bn.style.cssText='width:100%;margin-bottom:12px;padding:11px 12px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-weight:600;font-size:12.5px;cursor:pointer;text-align:left;line-height:1.3;';
     bn.onclick=()=>trocarView('notasfiscais');
