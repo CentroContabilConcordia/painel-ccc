@@ -2058,18 +2058,18 @@ function initMonitor(){
     return;
   }
   const aplicG=total-naG; const pct=aplicG>0?Math.round(concl/aplicG*100):(total>0?100:0); // % só sobre o que se aplica
-  const card=(cor,val,lbl)=>`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;flex:1;min-width:120px;">
-    <div style="font-size:26px;font-weight:700;color:${cor}">${val}</div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;">${lbl}</div></div>`;
-  const sec=(t,c)=>`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:14px;"><div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px;">${t}</div>${c}</div>`;
+  const sec=(t,c)=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-top:14px;box-shadow:var(--shadow);"><div style="font-size:14px;font-weight:700;margin-bottom:10px;">${t}</div>${c}</div>`;
+  const kpiN=(ic,bg,cor,val,lbl)=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;align-items:center;gap:13px;box-shadow:var(--shadow);"><div style="width:46px;height:46px;flex:none;border-radius:12px;display:grid;place-items:center;font-size:20px;background:${bg};">${ic}</div><div><div style="font-size:24px;font-weight:800;line-height:1;color:${cor};">${val}</div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-top:5px;">${lbl}</div></div></div>`;
+  const kpiDonut=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;align-items:center;gap:13px;box-shadow:var(--shadow);"><div style="width:56px;height:56px;flex:none;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green) ${pct}%,var(--surface3) 0);"><div style="width:42px;height:42px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-weight:800;font-size:13px;color:var(--green);">${pct}%</div></div><div><div style="font-size:24px;font-weight:800;line-height:1;">${pct}%</div><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-top:5px;">Concluído</div></div></div>`;
   const tagAtr=v=>`${v.atrasado?`<span style="color:var(--red)">🔴 ${v.atrasado}</span> `:''}${v.aguardando?`<span style="color:var(--yellow)">🟡 ${v.aguardando}</span>`:''}`;
 
   const pessoas=Object.entries(porPessoa).sort((a,b)=>(b[1].atrasado+b[1].aguardando)-(a[1].atrasado+a[1].aguardando));
-  const pessoasHtml=pessoas.map(([rid,v])=>{const _ap=v.total-v.na;const p=_ap>0?Math.round(v.ok/_ap*100):(v.total>0?100:0);return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
-      <div style="width:26px;height:26px;border-radius:50%;background:${_corPessoa(rid)};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">${_nomePessoa(rid)[0]}</div>
-      <div style="flex:1;min-width:110px;"><div style="font-size:13px;font-weight:600;">${_nomePessoa(rid)}</div><div style="font-size:10px;color:var(--muted);">${v.empresas} empresa(s)</div></div>
-      <div style="flex:2;min-width:100px;"><div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;"><div style="height:100%;width:${p}%;background:var(--green);"></div></div></div>
-      <div style="font-size:13px;font-weight:700;width:42px;text-align:right;">${p}%</div>
-      <div style="font-size:11px;width:90px;text-align:right;">${tagAtr(v)}</div></div>`;}).join('');
+  const pessoasHtml=pessoas.map(([rid,v])=>{const _ap=v.total-v.na;const p=_ap>0?Math.round(v.ok/_ap*100):(v.total>0?100:0);return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="width:34px;height:34px;border-radius:50%;background:${_corPessoa(rid)};color:#fff;display:grid;place-items:center;font-size:13px;font-weight:700;flex:none;">${_nomePessoa(rid)[0]}</div>
+      <div style="flex:1;min-width:130px;"><div style="font-size:13.5px;font-weight:600;">${_nomePessoa(rid)}</div><div style="font-size:11px;color:var(--muted);">${v.empresas} empresa(s)</div>
+        <div style="height:7px;background:var(--surface3);border-radius:99px;overflow:hidden;margin-top:6px;"><div style="height:100%;width:${p}%;background:var(--green);border-radius:99px;"></div></div></div>
+      <div style="font-size:15px;font-weight:800;width:46px;text-align:right;">${p}%</div>
+      <div style="font-size:12px;width:92px;text-align:right;white-space:nowrap;">${tagAtr(v)||'<span style="color:var(--green);font-weight:700;">✓</span>'}</div></div>`;}).join('');
 
   const emps=Object.entries(empMap).filter(([,v])=>v.atrasado>0||v.aguardando>0).sort((a,b)=>(b[1].atrasado*10+b[1].aguardando)-(a[1].atrasado*10+a[1].aguardando)).slice(0,25);
   const empsHtml=emps.length?emps.map(([emp,v])=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;"><div style="flex:1;">${emp}</div><div style="font-size:10px;color:var(--muted);">${_nomePessoa(v.resp)}</div><div style="width:100px;text-align:right;">${tagAtr(v)}</div></div>`).join(''):'<div style="color:var(--muted);padding:10px;">Nenhuma empresa com atraso ou esperando documento. 🎉</div>';
@@ -2077,8 +2077,8 @@ function initMonitor(){
   const tar=Object.entries(porTarefa).filter(([,v])=>v.atrasado>0||v.aguardando>0||v.pendente>0).sort((a,b)=>(b[1].atrasado*10+b[1].aguardando*5+b[1].pendente)-(a[1].atrasado*10+a[1].aguardando*5+a[1].pendente)).slice(0,25);
   const tarHtml=tar.length?tar.map(([desc,v])=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;"><div style="flex:1;">${desc}</div><div style="width:180px;text-align:right;">${v.atrasado?`<span style="color:var(--red)">🔴 ${v.atrasado}</span> `:''}${v.aguardando?`<span style="color:var(--yellow)">🟡 ${v.aguardando}</span> `:''}${v.pendente?`<span style="color:var(--muted)">⏳ ${v.pendente}</span>`:''}</div></div>`).join(''):'<div style="color:var(--muted);padding:10px;">Sem pendências por tipo de tarefa. 🎉</div>';
 
-  el.innerHTML=cab+`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
-      ${card('var(--green)',pct+'%','Concluído')}${card('var(--red)',atras,'🔴 Atrasadas')}${card('var(--yellow)',agu,'🟡 Aguardando doc.')}${card('var(--muted)',pend,'⏳ Pendentes')}</div>
+  el.innerHTML=cab+`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-top:16px;">
+      ${kpiDonut}${kpiN('⏰','var(--red-light)','var(--red)',atras,'Atrasadas')}${kpiN('📄','var(--yellow-light)','var(--yellow)',agu,'Aguardando doc.')}${kpiN('⏳','var(--accent-light)','var(--accent)',pend,'Pendentes')}</div>
     ${sec('👥 Por pessoa',pessoasHtml)}
     ${sec('🏢 Empresas que precisam de atenção',empsHtml)}
     ${sec('📋 Por tipo de tarefa',tarHtml)}`;
