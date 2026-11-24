@@ -1480,6 +1480,8 @@ async function iniciarApp(){
       const btn=document.createElement('button');btn.className='nav-btn active';btn.textContent='📚 Setor Contábil';
       btn.onclick=()=>trocarView('contabil',btn);nav.appendChild(btn);
     }
+    const bes=document.createElement('button');bes.className='nav-btn';bes.textContent='🔄 Esteira de Fechamento';bes.dataset.view='esteira';
+    bes.onclick=()=>trocarView('esteira',bes);nav.appendChild(bes);
     const bfi=document.createElement('button');bfi.className='nav-btn';bfi.textContent='🏢 Ficha das Empresas';bfi.dataset.view='fichas';
     bfi.onclick=()=>trocarView('fichas',bfi);nav.appendChild(bfi);
     document.getElementById('btn-add-tarefa').style.display='none';
