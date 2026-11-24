@@ -483,6 +483,7 @@ body.lateral header .logo{display:none;}
   <div class="rel-wrap" id="painel-societario" style="display:none"></div>
   <div class="rel-wrap" id="painel-bancosmes" style="display:none"></div>
   <div class="rel-wrap" id="painel-notasfiscais" style="display:none"></div>
+  <div class="rel-wrap" id="painel-esteira" style="display:none"></div>
   <style>
     .ca-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
     .btn-copia-num{flex-shrink:0;background:var(--surface3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;padding:5px 8px;line-height:1;}
@@ -1461,9 +1462,9 @@ async function iniciarApp(){
     bnf.onclick=()=>trocarView('notasfiscais',bnf);nav.appendChild(bnf);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
-    ['monitor','fichas','fiscal','contabil','bancosmes','societario','relatorios','admin'].forEach(v=>{
+    ['monitor','esteira','fichas','fiscal','contabil','bancosmes','societario','relatorios','admin'].forEach(v=>{
       const btn=document.createElement('button');btn.className='nav-btn'+(v==='monitor'?' active':'');btn.dataset.view=v;
-      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='fichas'?'🏢 Ficha das Empresas':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='bancosmes'?'🏦 Bancos':v==='societario'?'🏛️ Setor Societário':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
+      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='esteira'?'🔄 Esteira de Fechamento':v==='fichas'?'🏢 Ficha das Empresas':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='bancosmes'?'🏦 Bancos':v==='societario'?'🏛️ Setor Societário':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
       btn.onclick=()=>trocarView(v,btn);nav.appendChild(btn);
     });
     document.getElementById('btn-add-tarefa').style.display='';
@@ -1555,7 +1556,7 @@ function trocarView(v,btn){
   document.body.classList.remove('side-open');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario'||v==='bancosmes'||v==='notasfiscais');
+  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario'||v==='bancosmes'||v==='notasfiscais'||v==='esteira');
   document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
   document.getElementById('painel-admin').style.display=v==='admin'?'block':'none';
@@ -1566,6 +1567,7 @@ function trocarView(v,btn){
   document.getElementById('painel-societario').style.display=v==='societario'?'block':'none';
   document.getElementById('painel-bancosmes').style.display=v==='bancosmes'?'block':'none';
   document.getElementById('painel-notasfiscais').style.display=v==='notasfiscais'?'block':'none';
+  document.getElementById('painel-esteira').style.display=v==='esteira'?'block':'none';
   document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews&&v!=='fichas'?'':'none';
   if(v==='pendencias'){renderPendencias();return;}
   if(v==='monitor'){initMonitor();return;}
@@ -1576,6 +1578,7 @@ function trocarView(v,btn){
   if(v==='societario'){renderSocietario();return;}
   if(v==='bancosmes'){renderBancosMes();return;}
   if(v==='notasfiscais'){renderNotasFiscais();return;}
+  if(v==='esteira'){renderEsteira();return;}
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
   const _lblOc=document.getElementById('lbl-ocultar');
   if(_lblOc){ _lblOc.style.display=(v==='fiscal'||v==='contabil')?'flex':'none'; const _ck=document.getElementById('chk-ocultar'); if(_ck)_ck.checked=ocultarConcluidas; }
@@ -2082,6 +2085,118 @@ function initMonitor(){
     ${sec('👥 Por pessoa',pessoasHtml)}
     ${sec('🏢 Empresas que precisam de atenção',empsHtml)}
     ${sec('📋 Por tipo de tarefa',tarHtml)}`;
+}
+// ============ 🔄 Esteira de Fechamento ============
+let _estEmp=null; let _estMes=null; let _estBusca=''; let _estFlat=[];
+const EST_FASES=[
+  {k:'doc',nome:'Documentos',ic:'📥',areas:['Controle de Documentos'],cor:'#8a7d3f'},
+  {k:'fis',nome:'Fiscal',ic:'🧾',areas:['Fechamentos Fiscais'],cor:'#4f7a6a'},
+  {k:'apu',nome:'Apuração',ic:'🧮',areas:['Apuração de Tributos'],cor:'#9c6b3a'},
+  {k:'aces',nome:'Acessórias',ic:'📤',areas:['Obrigações Acessórias'],cor:'#6b6f8c'},
+  {k:'cont',nome:'Contábil',ic:'📚',areas:['Contábil'],cor:'#6b7a4e'},
+];
+const _EST_B2S={todo:'pendente',doing:'andamento',wait:'aguardando',done:'concluido'};
+const _EST_ST=[['pendente','A fazer'],['andamento','Em andamento'],['aguardando','Aguardando cliente'],['concluido','Concluída']];
+function _estFaseDe(area){ const f=EST_FASES.find(f=>f.areas.includes(area)); return f?f.k:'cont'; }
+function _estMkDe(setor,emp,mes){ return setor==='fiscal'?ownerNoMes(emp,mes):'contabil'; }
+function _estTarefas(emp,mes){
+  const out=[];
+  if(_naoExistiaMes(emp,mes))return out;
+  const fo=ownerNoMes(emp,mes);
+  if(fo)(getMesData('fiscal',fo,emp,mes).tarefas||[]).forEach(t=>out.push({setor:'fiscal',id:t.id,desc:t.desc,area:t.area,status:t.status,fase:_estFaseDe(t.area)}));
+  (getMesData('contabil','contabil',emp,mes).tarefas||[]).forEach(t=>out.push({setor:'contabil',id:t.id,desc:t.desc,area:t.area,status:t.status,fase:_estFaseDe(t.area)}));
+  return out;
+}
+function _estAtras(t){ return t.status==='atrasado'; }
+function _estBucket(t){ if(t.status==='concluido')return 'done'; if(t.status==='aguardando')return 'wait'; if(t.status==='andamento')return 'doing'; return 'todo'; }
+function _estResumo(emp,mes){
+  const ts=_estTarefas(emp,mes).filter(t=>t.status!=='naoseaplica');
+  const fases={}; EST_FASES.forEach(f=>fases[f.k]={aplic:0,done:0});
+  let aplic=0,done=0; const buckets={todo:0,doing:0,wait:0,done:0};
+  ts.forEach(t=>{ fases[t.fase].aplic++; aplic++; if(t.status==='concluido'){fases[t.fase].done++;done++;} buckets[_estBucket(t)]++; });
+  const pct=aplic>0?Math.round(done/aplic*100):0;
+  return {ts,fases,aplic,done,pct,buckets,total:ts.length};
+}
+async function estSet(setor,id,novo){
+  const emp=_estEmp, mes=_estMes; if(!emp)return;
+  const mk=_estMkDe(setor,emp,mes);
+  const md=getMesData(setor,mk,emp,mes); const t=(md.tarefas||[]).find(x=>String(x.id)===String(id)); if(!t)return;
+  t.status=novo; if(novo==='concluido'){ if(!t.concluidoEm)t.concluidoEm=_hojeYMD(); } else { delete t.concluidoEm; }
+  setMesData(setor,mk,emp,mes,md); await saveDB(); renderEsteira(); toast('✓ Etapa atualizada');
+}
+function abrirEsteira(i){ _estEmp=_estFlat[i]||null; renderEsteira(); }
+function fecharEsteira(){ _estEmp=null; renderEsteira(); }
+function navEstMes(d){ _estMes=_mesAdd(_estMes||mesAtual||_hojeYMD().slice(0,7),d); renderEsteira(); }
+function renderEsteira(){
+  const el=document.getElementById('painel-esteira'); if(!el)return;
+  if(!_estMes)_estMes=mesAtual||_hojeYMD().slice(0,7);
+  if(_estEmp){ _renderEsteiraEmp(el); return; }
+  el.innerHTML=`
+    <div class="rel-titulo" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">🔄 Esteira de Fechamento
+      <span class="mes-nav" style="display:inline-flex;align-items:center;gap:4px;"><button class="mes-btn" onclick="navEstMes(-1)">‹</button><span class="mes-atual">${mesLabel(_estMes)}</span><button class="mes-btn" onclick="navEstMes(1)">›</button></span></div>
+    <div class="rel-sub">Fechamento mensal por etapas · clique numa empresa para ver a trilha e o quadro.</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0 12px;">
+      <input class="ficha-input" id="est-busca" placeholder="🔍 Buscar empresa..." value="${_escAttrP(_estBusca)}" oninput="_estBusca=this.value;_renderEstLista()" style="max-width:240px;"/>
+      <span id="est-count" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+    <div id="est-lista"></div>`;
+  _renderEstLista();
+}
+function _renderEstLista(){
+  const cont=document.getElementById('est-lista'); if(!cont)return;
+  const b=(_estBusca||'').toLowerCase().trim(); _estFlat=[];
+  const linhas=[];
+  TODAS_EMPRESAS.forEach(e=>{
+    if(b && !e.toLowerCase().includes(b))return;
+    const r=_estResumo(e,_estMes); if(r.total===0)return;
+    _estFlat.push(e); const idx=_estFlat.length-1;
+    const mini=EST_FASES.map(f=>{const fs=r.fases[f.k];const p=fs.aplic>0?Math.round(fs.done/fs.aplic*100):0;const col=p>=100?'var(--green)':p>0?f.cor:'var(--surface3)';return `<div title="${f.nome}: ${fs.done}/${fs.aplic}" style="flex:1;height:7px;border-radius:99px;background:var(--surface3);overflow:hidden;"><div style="height:100%;width:${p}%;background:${col};"></div></div>`;}).join('');
+    linhas.push({idx,e,pct:r.pct,mini});
+  });
+  linhas.sort((a,b2)=>a.pct-b2.pct || a.e.localeCompare(b2.e,'pt'));
+  const nEmp=linhas.length; const media=nEmp?Math.round(linhas.reduce((s,L)=>s+L.pct,0)/nEmp):0;
+  const cc=document.getElementById('est-count'); if(cc)cc.textContent=`${nEmp} empresa(s) · média ${media}%`;
+  cont.innerHTML=linhas.length?linhas.map(L=>`<div onclick="abrirEsteira(${L.idx})" style="display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--border);border-radius:11px;margin-bottom:8px;background:var(--surface);cursor:pointer;box-shadow:var(--shadow);">
+      <div style="flex:1;min-width:150px;"><div style="font-size:13.5px;font-weight:600;">${_escP(L.e)}</div><div style="display:flex;gap:4px;margin-top:7px;max-width:270px;">${L.mini}</div></div>
+      <div style="width:120px;"><div style="height:7px;background:var(--surface3);border-radius:99px;overflow:hidden;"><div style="height:100%;width:${L.pct}%;background:var(--green);border-radius:99px;"></div></div></div>
+      <div style="font-size:15px;font-weight:800;width:46px;text-align:right;">${L.pct}%</div>
+      <div style="font-size:16px;color:var(--muted);">›</div></div>`).join(''):'<div style="color:var(--muted);padding:24px;text-align:center;">Nenhuma empresa com tarefas geradas neste mês ainda.</div>';
+}
+function _renderEsteiraEmp(el){
+  const emp=_estEmp, mes=_estMes; const r=_estResumo(emp,mes);
+  const faseNode=(f)=>{const fs=r.fases[f.k];const pct=fs.aplic>0?Math.round(fs.done/fs.aplic*100):0;const done=fs.aplic>0&&fs.done===fs.aplic;const started=fs.done>0;
+    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:96px;">
+      <div style="width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:15px;font-weight:800;${done?'background:var(--green);color:#fff;border:3px solid var(--green);':started?'color:var(--green);border:3px solid var(--green);background:var(--surface);':'color:var(--muted);border:3px solid var(--surface3);background:var(--surface);'}">${done?'✓':(fs.aplic>0?pct+'%':'–')}</div>
+      <div style="font-size:12px;font-weight:700;text-align:center;">${f.ic} ${f.nome}</div>
+      <div style="font-size:11px;color:var(--muted);">${fs.done}/${fs.aplic}</div></div>`;};
+  const card=(t)=>{const f=EST_FASES.find(x=>x.k===t.fase);const bk=_estBucket(t);
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid ${f.cor};border-radius:10px;padding:9px 10px;margin-bottom:8px;box-shadow:var(--shadow);">
+      <div style="font-size:12.5px;font-weight:600;line-height:1.3;">${_escP(t.desc)}</div>
+      <div style="display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap;">
+        <span style="font-size:10px;font-weight:700;color:#fff;background:${f.cor};padding:2px 7px;border-radius:5px;">${f.nome}</span>
+        ${_estAtras(t)?`<span style="font-size:10px;font-weight:700;color:var(--red);background:var(--red-light);padding:2px 7px;border-radius:5px;">⚠ Atrasada</span>`:''}
+        <select onchange="estSet('${t.setor}','${t.id}',this.value)" style="margin-left:auto;font-size:11px;border:1px solid var(--border);border-radius:6px;padding:3px 5px;background:var(--surface2);cursor:pointer;">
+          ${_EST_ST.map(s=>`<option value="${s[0]}"${_EST_B2S[bk]===s[0]?' selected':''}>${s[1]}</option>`).join('')}
+        </select></div></div>`;};
+  const trilha=EST_FASES.map(faseNode).join('');
+  const COLS=[['todo','A fazer','var(--muted)'],['doing','Em andamento','#3b74c4'],['wait','Aguardando cliente','var(--yellow)'],['done','Concluída','var(--green)']];
+  const colHtml=COLS.map(c=>{const cards=r.ts.filter(t=>_estBucket(t)===c[0]);
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:11px;min-width:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;"><b style="font-size:12.5px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c[2]};margin-right:6px;"></span>${c[1]}</b><span style="font-size:12px;font-weight:700;color:var(--muted);background:var(--surface3);border-radius:999px;padding:1px 8px;">${cards.length}</span></div>
+      ${cards.map(card).join('')||'<div style="font-size:11px;color:var(--muted);text-align:center;padding:8px;">—</div>'}</div>`;}).join('');
+  const fo=ownerNoMes(emp,mes); const foNome=fo&&USUARIOS[fo]?USUARIOS[fo].nome:'—';
+  el.innerHTML=`
+    <div class="rel-titulo" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">🔄 Esteira de Fechamento
+      <span class="mes-nav" style="display:inline-flex;align-items:center;gap:4px;"><button class="mes-btn" onclick="navEstMes(-1)">‹</button><span class="mes-atual">${mesLabel(mes)}</span><button class="mes-btn" onclick="navEstMes(1)">›</button></span></div>
+    <button onclick="fecharEsteira()" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:2px 0 10px;">← Todas as empresas</button>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:16px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
+      <div style="width:58px;height:58px;flex:none;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--green) ${r.pct}%,var(--surface3) 0);"><div style="width:44px;height:44px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-weight:800;font-size:13px;color:var(--green);">${r.pct}%</div></div>
+      <div style="flex:1;min-width:160px;"><div style="font-size:16px;font-weight:700;">${_escP(emp)}</div><div style="font-size:12px;color:var(--muted);margin-top:2px;">Competência ${mesLabel(mes)} · Fiscal: ${_escP(foNome)} · ${r.done}/${r.aplic} etapas concluídas</div></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:4px 2px 9px;">Trilha do fechamento</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:20px 14px;overflow-x:auto;margin-bottom:16px;"><div style="display:flex;align-items:flex-start;min-width:560px;">${trilha}</div></div>
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:4px 2px 9px;">Quadro de etapas</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:12px;">${colHtml}</div>`;
 }
 function initRelatorios(){
   const selMes=document.getElementById('rel-mes');selMes.innerHTML='';
