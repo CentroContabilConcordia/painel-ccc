@@ -3074,7 +3074,8 @@ function _bmImprimirFaltam(){
   const grupos={};
   Object.keys(bancosCad||{}).forEach(emp=>{
     const contas=bancosCad[emp]||[]; if(!contas.length)return;
-    const faltam=contas.filter(c=>!_bmRec(emp,mes,c.id).ext);
+    // Lista p/ cobrar o cliente: só contas SEM extrato recebido E SEM importação (se já importou, já tem o extrato)
+    const faltam=contas.filter(c=>{const r=_bmRec(emp,mes,c.id); return !r.ext && !r.imp;});
     if(!faltam.length)return;
     const foId=ownerNoMes(emp,mes);
     if(_bmImpMenina && foId!==_bmImpMenina)return; // filtro: só a menina escolhida
@@ -3125,8 +3126,8 @@ function _bmImprimirFaltam(){
       #bm-imp-faltam .chk{font-size:14px;}
     </style>
     <div class="hd">
-      <div class="t1">🏦 Bancos — Faltam Extrato${meninaNome?(' — '+_escP(meninaNome)):''}</div>
-      <div class="t2">${mesLabel(mes)} · Gerado em ${_notaFmtData(_hojeYMD())} · ${totE} empresa(s), ${totC} conta(s) pendente(s)</div>
+      <div class="t1">🏦 Bancos — Extratos a solicitar ao cliente${meninaNome?(' — '+_escP(meninaNome)):''}</div>
+      <div class="t2">${mesLabel(mes)} · Gerado em ${_notaFmtData(_hojeYMD())} · ${totE} empresa(s), ${totC} conta(s) · Só contas sem extrato recebido e sem importação</div>
     </div>
     ${corpo}
   </div>`;
