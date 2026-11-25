@@ -1473,6 +1473,9 @@ async function iniciarApp(){
     bbm.onclick=()=>trocarView('bancosmes',bbm);nav.appendChild(bbm);
     const bnf=document.createElement('button');bnf.className='nav-btn';bnf.textContent='🧾 Notas Fiscais Emitidas';bnf.dataset.view='notasfiscais';
     bnf.onclick=()=>trocarView('notasfiscais',bnf);nav.appendChild(bnf);
+    // Ficha das Empresas em leitura (toda edição da ficha é gestora/Jussara)
+    const bfiu=document.createElement('button');bfiu.className='nav-btn';bfiu.textContent='🏢 Ficha das Empresas';bfiu.dataset.view='fichas';
+    bfiu.onclick=()=>trocarView('fichas',bfiu);nav.appendChild(bfiu);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
     ['monitor','esteira','fichas','fiscal','contabil','bancosmes','societario','relatorios','admin'].forEach(v=>{
