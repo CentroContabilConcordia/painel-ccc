@@ -1975,6 +1975,8 @@ function _pendItens(setor,mk,filtroResp){
     if(!empAtiva(emp))return;
     const md=bucket[emp][mesAtual]; if(!md)return;
     if(filtroResp && md.responsavel!==filtroResp)return;
+    // Fiscal: só a carteira da menina NO MÊS (ignora células antigas de empresa que mudou de dono ou ficou sem dono)
+    if(setor==='fiscal' && ownerNoMes(emp,mesAtual)!==mk)return;
     (md.tarefas||[]).forEach(t=>{
       if(t.status==='concluido'||t.status==='naoseaplica')return;
       let prazo=null,dias=null,venceu=false;
