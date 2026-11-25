@@ -924,7 +924,7 @@ async function saveFichas(){
     if(typeof empresaAtual!=='undefined' && empresaAtual && fichas[empresaAtual]!==undefined){
       await window.Backend.saveFicha(empresaAtual, fichas[empresaAtual]);
     }
-  }catch(e){console.warn('[CCC] saveFichas falhou',e);}
+  }catch(e){console.warn('[CCC] saveFichas falhou',e); toast('⚠️ Não foi possível salvar no servidor — sua alteração pode NÃO ter sido gravada. Avise o suporte.','#dc2626');}
 }
 async function loadBancos(){ /* os bancos vêm da tabela empresas, carregada em loadRef() */ }
 async function saveBancos(){
@@ -933,7 +933,7 @@ async function saveBancos(){
     if(typeof empresaAtual!=='undefined' && empresaAtual){
       await window.Backend.saveBancos(empresaAtual, bancosCad[empresaAtual]||[]);
     }
-  }catch(e){console.warn('[CCC] saveBancos falhou',e);}
+  }catch(e){console.warn('[CCC] saveBancos falhou',e); toast('⚠️ Não foi possível salvar no servidor — sua alteração pode NÃO ter sido gravada. Avise o suporte.','#dc2626');}
 }
 let _loadedV=0; // versão do blob de tarefas que está carregada no local (p/ detectar conflito ao salvar)
 async function loadDB(){
@@ -1380,6 +1380,8 @@ function getMembroKey(){
   return membroAtual;
 }
 function isGestora(){return usuarioAtual&&USUARIOS[usuarioAtual].role==='gestora';}
+// Quem pode EDITAR a Ficha das Empresas (aba central): gestoras + Jussara (societário). Demais só leem.
+function _podeEditarFicha(){ return isGestora() || !!(USUARIOS[usuarioAtual]||{}).societario; }
 
 // LOGIN
 function initLogin(){
@@ -3658,7 +3660,7 @@ function _capitalSocialMudou(val){
   fichas[empresaAtual]=ficha; _rerenderSocios();
 }
 function _rerenderSocios(){
-  const ficha=getFicha(empresaAtual); const ge=isGestora(); const ro=ge?'':'readonly';
+  const ficha=getFicha(empresaAtual); const ge=_podeEditarFicha(); const ro=ge?'':'readonly';
   const el=document.getElementById('socios-lista'); if(el) el.innerHTML=renderSociosHTML(ficha, ge, ro);
   const sl=document.getElementById('socios-soma'); if(sl) sl.innerHTML=_sociosSomaHTML(ficha);
 }
@@ -3732,14 +3734,14 @@ function obsBlocoHTML(ficha, titulo){
           <div class="obs-item" id="obs-${o.id}" style="flex-direction:column;align-items:stretch;">
             <div style="display:flex;align-items:flex-start;gap:6px;">
               <div class="obs-texto" style="flex:1;white-space:pre-wrap;">${_escP(o.texto)}</div>
-              ${isGestora()?`<button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar arquivo">📎</button>
+              ${_podeEditarFicha()?`<button class="obs-del" onclick="anexarImgObs('${o.id}')" title="Anexar arquivo">📎</button>
               <button class="obs-del" onclick="editarObs('${o.id}')" title="Editar">✎</button>
               <button class="obs-del" onclick="deletarObs('${o.id}')" title="Remover">✕</button>`:''}
             </div>
-            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((a,ix)=>_anxChip(a, isGestora()?`removerImgObs('${o.id}',${ix})`:'', 150)).join('')}</div>`:''}
+            ${(o.imagens&&o.imagens.length)?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${o.imagens.map((a,ix)=>_anxChip(a, _podeEditarFicha()?`removerImgObs('${o.id}',${ix})`:'', 150)).join('')}</div>`:''}
           </div>`).join('')}
       </div>
-      ${((USUARIOS[usuarioAtual]||{}).role==='societario')?'':`<div class="obs-add-row">
+      ${false?'':`<div class="obs-add-row">
         <textarea class="obs-add-inp" id="obs-nova" placeholder="Adicionar observação, particularidade ou alerta..."></textarea>
         <button class="obs-add-btn" onclick="adicionarObs()">Adicionar</button>
       </div>
@@ -3752,7 +3754,7 @@ function obsBlocoHTML(ficha, titulo){
 
 function renderFicha(col){
   const ficha=getFicha(empresaAtual);
-  const podeEditar=isGestora();
+  const podeEditar=_podeEditarFicha();
   const ro=podeEditar?'':'readonly';
   const dis=podeEditar?'':'disabled';
 
@@ -3838,9 +3840,9 @@ function renderFicha(col){
 
     ${podeEditar?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
       <button class="ficha-save-btn" onclick="salvarFicha()">💾 Salvar Ficha</button>
-      <button class="ficha-save-btn" style="background:var(--surface3);color:var(--text)" onclick="renomearEmpresa()">✏️ Renomear</button>
+      ${isGestora()?`<button class="ficha-save-btn" style="background:var(--surface3);color:var(--text)" onclick="renomearEmpresa()">✏️ Renomear</button>
       <button class="ficha-save-btn" style="background:var(--surface3);color:var(--text)" onclick="toggleAtivaEmpresa()">${ativa?'🔴 Inativar':'🟢 Reativar'}</button>
-      <button class="ficha-save-btn" style="background:var(--red)" onclick="excluirEmpresaAtual()">🗑️ Excluir Empresa</button>
+      <button class="ficha-save-btn" style="background:var(--red)" onclick="excluirEmpresaAtual()">🗑️ Excluir Empresa</button>`:''}
     </div>`:''}
   `;
   col.appendChild(wrap);
@@ -3951,7 +3953,7 @@ function _anexoSugerido(codigo){
   return 'Anexo III — Serviços';
 }
 function renderCnaesLista(ficha){
-  const cn=ficha.cnaes||[]; const ed=isGestora();
+  const cn=ficha.cnaes||[]; const ed=_podeEditarFicha();
   if(!cn.length) return `<div style="font-size:12px;color:var(--muted);padding:6px 0;">Nenhum CNAE ainda.${ed?' Serão puxados da Receita ou você pode adicionar manualmente.':''}</div>`;
   const regime=(document.getElementById('f-regime')?.value)||ficha.regime||'Simples Nacional';
   const isSimples=regime==='Simples Nacional';
@@ -3998,7 +4000,7 @@ function _cnaeDerivaAnexos(ficha){
   ficha.anexos=set; ficha.anexo=set.join(', ');
 }
 async function cnaeAdd(){
-  if(!isGestora()){toast('Só as gestoras editam o regime tributário','#dc2626');return;}
+  if(!_podeEditarFicha()){toast('Sem permissão','#dc2626');return;}
   if(!empresaAtual)return;
   const cod=(prompt('Código do CNAE (ex.: 4744-0/01):','')||'').trim();
   if(!cod)return;
@@ -4008,7 +4010,7 @@ async function cnaeAdd(){
   fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas();
 }
 async function cnaeDel(i){
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const f=getFicha(empresaAtual); if(!f.cnaes||!f.cnaes[i])return;
   if(!confirm('Remover este CNAE?'))return;
   const eraPrinc=f.cnaes[i].principal;
@@ -4017,26 +4019,26 @@ async function cnaeDel(i){
   _cnaeDerivaAnexos(f); fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas();
 }
 async function cnaeSet(i,campo,val){
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const f=getFicha(empresaAtual); if(!f.cnaes||!f.cnaes[i])return;
   f.cnaes[i][campo]=val;
   if(campo==='anexo'){ f.cnaes[i].anexoSug=false; _cnaeDerivaAnexos(f); _cnaeRerender(); } // marcar manual = confirmado
   fichas[empresaAtual]=f; await saveFichas();
 }
 async function cnaeSetTrib(i,campo,val){ // PIS/COFINS/IRPJ/CSLL/ISS (LP/LR)
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const f=getFicha(empresaAtual); if(!f.cnaes||!f.cnaes[i])return;
   f.cnaes[i][campo]=val; f.cnaes[i].tribSug=false; // marcar manual = confirmado
   fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas();
 }
 async function cnaeConfirmarSugeridos(){
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const f=getFicha(empresaAtual); if(!f.cnaes)return;
   f.cnaes.forEach(c=>{ if(c.anexoSug) c.anexoSug=false; if(c.tribSug) c.tribSug=false; });
   fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas(); toast('✓ Sugestões confirmadas');
 }
 async function cnaePrincipal(i){
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const f=getFicha(empresaAtual); if(!f.cnaes||!f.cnaes[i])return;
   f.cnaes.forEach((c,j)=>c.principal=(j===i));
   fichas[empresaAtual]=f; _cnaeRerender(); await saveFichas();
@@ -4122,7 +4124,7 @@ async function excluirMudancaRegime(desde){
 }
 
 function adicionarContato(){
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const ficha=getFicha(empresaAtual);
   if(!ficha.contatos)ficha.contatos=[];
   ficha.contatos.push({nome:'',cargo:'',telefone:'',email:''});
@@ -4137,7 +4139,7 @@ function atualizarContato(idx,campo,val){
 }
 
 async function deletarContato(idx){
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const ficha=getFicha(empresaAtual);
   ficha.contatos=(ficha.contatos||[]).filter((_,i)=>i!==idx);
   fichas[empresaAtual]=ficha;
@@ -4147,7 +4149,7 @@ async function deletarContato(idx){
 }
 
 function adicionarSocio(){
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const ficha=getFicha(empresaAtual);
   if(!ficha.socios)ficha.socios=[];
   ficha.socios.push({nome:'',qualificacao:'',desde:'',cpf:'',capital:'',pct:''});
@@ -4160,7 +4162,7 @@ function atualizarSocio(idx,campo,val){
   fichas[empresaAtual]=ficha;
 }
 async function removerSocio(idx){
-  if(!isGestora())return;
+  if(!_podeEditarFicha())return;
   const ficha=getFicha(empresaAtual);
   ficha.socios=(ficha.socios||[]).filter((_,i)=>i!==idx);
   fichas[empresaAtual]=ficha;
@@ -4170,7 +4172,7 @@ async function removerSocio(idx){
 }
 
 async function salvarFicha(){
-  if(!isGestora()){toast('Sem permissão','#dc2626');return;}
+  if(!_podeEditarFicha()){toast('Sem permissão','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
   ficha.capitalSocial=document.getElementById('f-capitalSocial')?.value||'';
   ficha.codigoQuestor=(document.getElementById('f-codquestor')?.value||'').trim();
@@ -4244,7 +4246,7 @@ async function anexarImgNova(input){
   catch(e){ console.warn('[CCC] upload',e); toast('Erro ao enviar arquivo (verifique o tipo/limite do Supabase)','#dc2626'); }
 }
 async function anexarImgObs(obsId){
-  if(!isGestora()){toast('Sem permissão — só gestora altera observação','#dc2626');return;}
+  if(!_podeEditarFicha()){toast('Sem permissão','#dc2626');return;}
   const inp=document.createElement('input'); inp.type='file'; inp.accept=OBS_ACCEPT;
   inp.onchange=async()=>{
     const f=inp.files&&inp.files[0]; if(!f)return;
@@ -4258,13 +4260,13 @@ async function anexarImgObs(obsId){
   inp.click();
 }
 async function removerImgObs(obsId,ix){
-  if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
+  if(!_podeEditarFicha()){toast('Sem permissão','#dc2626');return;}
   const ficha=getFicha(empresaAtual); const o=_obsList(ficha).find(x=>x.id===obsId);
   if(o&&o.imagens){ o.imagens.splice(ix,1); fichas[empresaAtual]=ficha; await saveFichas(); _reRenderObsHost(); toast('Imagem removida'); }
 }
 
 async function deletarObs(obsId){
-  if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
+  if(!_podeEditarFicha()){toast('Sem permissão','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
   ficha[_obsProp()]=_obsList(ficha).filter(o=>o.id!==obsId);
   fichas[empresaAtual]=ficha;
@@ -4273,7 +4275,7 @@ async function deletarObs(obsId){
   toast('Observação removida');
 }
 async function editarObs(obsId){
-  if(!isGestora()){toast('Sem permissão — só gestora altera/exclui observação','#dc2626');return;}
+  if(!_podeEditarFicha()){toast('Sem permissão','#dc2626');return;}
   const ficha=getFicha(empresaAtual);
   const o=_obsList(ficha).find(x=>x.id===obsId);
   if(!o)return;
