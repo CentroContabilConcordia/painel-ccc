@@ -851,7 +851,7 @@ const SK_SOCIETARIO='ccc_societario_v1';
 // do status legado por banco, p/ alimentar também a visão consolidada do Uriel.
 const SK_BANCOS_MES='ccc_bancos_mes_v1';
 let bancosMes={}; // bancosMes[empresa][mesKey][contaId] = {ext:0/1, imp:0/1}
-let _bmMes=null; let _bmBusca=''; let _bmSoPend=false; let _bmFlat=[];
+let _bmMes=null; let _bmBusca=''; let _bmSoPend=false; let _bmFlat=[]; let _bmImpMenina='';
 // Notas Fiscais — modelo de DEMANDA: a menina do fiscal pede (dentro da empresa) → o Uriel emite.
 const SK_NOTAS='ccc_notas_v1';
 let notasDem=[]; let _notaEditando=null; let _notaEmitindo=null; let _notaFiltroStatus=''; let _notaBusca=''; let _notaExp=null; let _notaDup=null;
@@ -3000,7 +3000,11 @@ function renderBancosMes(){
       <button class="mes-btn" onclick="navBmMes(1)">›</button>
       <input class="ficha-input" placeholder="🔍 Buscar empresa..." value="${_escAttrP(_bmBusca)}" oninput="_bmBusca=this.value;renderBmLista()" style="max-width:220px;"/>
       <label style="font-size:12px;color:var(--muted);display:flex;gap:5px;align-items:center;cursor:pointer;"><input type="checkbox" ${_bmSoPend?'checked':''} onchange="_bmSoPend=this.checked;renderBmLista()"/> só pendentes</label>
-      <button onclick="_bmImprimirFaltam()" title="Imprimir / PDF das contas que faltam extrato, separadas por menina" style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;">🖨️ Imprimir faltam extrato</button>
+      <select onchange="_bmImpMenina=this.value" title="Para imprimir: todas as meninas ou só uma" style="margin-left:auto;font-size:12.5px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;">
+        <option value="" ${_bmImpMenina===''?'selected':''}>🖨️ Imprimir: todas as meninas</option>
+        ${MEMBROS_FISCAL.map(m=>`<option value="${m.id}" ${_bmImpMenina===m.id?'selected':''}>🖨️ Imprimir: só ${_escP(m.nome)}</option>`).join('')}
+      </select>
+      <button onclick="_bmImprimirFaltam()" title="Gera a impressão / PDF das contas que faltam extrato" style="display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;">🖨️ Imprimir faltam extrato</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:8px 0 12px;">
       ${_socMetrica('Contas',totC,'')}
@@ -3071,6 +3075,7 @@ function _bmImprimirFaltam(){
     const faltam=contas.filter(c=>!_bmRec(emp,mes,c.id).ext);
     if(!faltam.length)return;
     const foId=ownerNoMes(emp,mes);
+    if(_bmImpMenina && foId!==_bmImpMenina)return; // filtro: só a menina escolhida
     const foU=(foId&&USUARIOS[foId])?USUARIOS[foId]:null;
     const key=foU?('u_'+foId):'__sem__';
     const gfId=(getFicha(emp)||{}).gestora;
@@ -3080,9 +3085,10 @@ function _bmImprimirFaltam(){
   });
   const chaves=Object.keys(grupos).sort((a,b)=>grupos[a].nome.localeCompare(grupos[b].nome,'pt'));
   let totC=0,totE=0; chaves.forEach(k=>grupos[k].empresas.forEach(e=>{totC+=e.contas.length;totE++;}));
+  const meninaNome=_bmImpMenina?((USUARIOS[_bmImpMenina]||{}).nome||''):'';
   let corpo='';
   if(!chaves.length){
-    corpo='<p style="text-align:center;padding:30px;color:#16a34a;font-size:15px;">🎉 Nenhuma conta com extrato pendente neste mês.</p>';
+    corpo='<p style="text-align:center;padding:30px;color:#16a34a;font-size:15px;">🎉 Nenhuma conta com extrato pendente'+(meninaNome?(' para '+_escP(meninaNome)):'')+' neste mês.</p>';
   }else{
     chaves.forEach(k=>{
       const g=grupos[k]; const qc=g.empresas.reduce((s,e)=>s+e.contas.length,0);
@@ -3106,6 +3112,7 @@ function _bmImprimirFaltam(){
       #bm-imp-faltam .t1{font-size:20px;font-weight:800;color:#495733;}
       #bm-imp-faltam .t2{font-size:12px;color:#555;margin-top:3px;}
       #bm-imp-faltam .grp{margin-bottom:16px;page-break-inside:avoid;}
+      #bm-imp-faltam .grp + .grp{page-break-before:always;}
       #bm-imp-faltam h2{font-size:14px;color:#fff;background:#6b7a4e;padding:6px 10px;border-radius:6px;margin:0 0 8px;}
       #bm-imp-faltam h2 .cnt{font-size:11px;font-weight:500;opacity:.92;}
       #bm-imp-faltam .emp{margin:0 0 9px 2px;page-break-inside:avoid;}
@@ -3116,7 +3123,7 @@ function _bmImprimirFaltam(){
       #bm-imp-faltam .chk{font-size:14px;}
     </style>
     <div class="hd">
-      <div class="t1">🏦 Bancos — Faltam Extrato</div>
+      <div class="t1">🏦 Bancos — Faltam Extrato${meninaNome?(' — '+_escP(meninaNome)):''}</div>
       <div class="t2">${mesLabel(mes)} · Gerado em ${_notaFmtData(_hojeYMD())} · ${totE} empresa(s), ${totC} conta(s) pendente(s)</div>
     </div>
     ${corpo}
