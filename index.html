@@ -496,6 +496,7 @@ body.membros-topo .col-empresas,body.membros-topo #col-tarefas{height:calc(100vh
   <div class="rel-wrap" id="painel-societario" style="display:none"></div>
   <div class="rel-wrap" id="painel-bancosmes" style="display:none"></div>
   <div class="rel-wrap" id="painel-notasfiscais" style="display:none"></div>
+  <div class="rel-wrap" id="painel-balancetes" style="display:none"></div>
   <div class="rel-wrap" id="painel-esteira" style="display:none"></div>
   <style>
     .ca-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
@@ -859,6 +860,11 @@ const NOTA_TIPOS=[['nfe','NF-e (produto)'],['nfse','NFS-e (serviço)']];
 const NOTA_NATUREZAS=['Venda','Remessa','Devolução','Bonificação','Transferência','Industrialização','Outra'];
 const NOTA_FORMAS=['À vista','A prazo','PIX','Boleto','Cartão','Dinheiro','Transferência','Outra'];
 const NOTA_STATUS=[['pendente','Pendente'],['emitida','Emitida'],['cancelada','Cancelada']];
+// Balancetes — modelo de DEMANDA: a gestora solicita → a contábil (Carla/Neusa) entrega (com o PDF).
+const SK_BAL='ccc_balancetes_v1';
+let balancetesDem=[]; let _balEditando=null; let _balEntregando=null; let _balFiltroStatus=''; let _balBusca=''; let _balExp=null;
+const BAL_STATUS=[['pendente','Pendente'],['entregue','Entregue'],['cancelada','Cancelada']];
+const BAL_FINALIDADES=['Cliente','Banco / financiamento','Licitação','Contador externo','Órgão público','Uso interno','Outra'];
 let processos=[]; let _procFiltro=''; let _procEditando=null; let _procImgs=[]; let _obsNovaImgs=[];
 // Societário: lista de demandas (modelo por evento, não mensal). Cada item = um serviço societário acompanhado até concluir.
 let societarioDem=[]; let _socFiltroStatus=''; let _socFiltroTipo=''; let _socBusca=''; let _socEditando=null; let _socExpandida=null;
@@ -1155,6 +1161,14 @@ async function loadNotas(){
 async function saveNotas(){
   try{await window.storage.set(SK_NOTAS,JSON.stringify(notasDem));}
   catch(e){console.warn('[CCC] saveNotas falhou',e);}
+}
+async function loadBalancetes(){
+  try{const r=await window.storage.get(SK_BAL);if(r&&r.value){balancetesDem=JSON.parse(r.value)||[];}}
+  catch(e){console.warn('[CCC] loadBalancetes falhou',e);}
+}
+async function saveBalancetes(){
+  try{await window.storage.set(SK_BAL,JSON.stringify(balancetesDem));}
+  catch(e){console.warn('[CCC] saveBalancetes falhou',e); toast('⚠️ Não foi possível salvar o pedido no servidor. Avise o suporte.','#dc2626');}
 }
 async function loadContabAnual(){
   try{const r=await window.storage.get(SK_CONTAB_ANUAL);if(r&&r.value)contabAnual=JSON.parse(r.value)||{};}
@@ -1480,9 +1494,9 @@ async function iniciarApp(){
     bfiu.onclick=()=>trocarView('fichas',bfiu);nav.appendChild(bfiu);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
-    ['monitor','esteira','fichas','fiscal','contabil','bancosmes','societario','relatorios','admin'].forEach(v=>{
+    ['monitor','esteira','fichas','fiscal','contabil','balancetes','bancosmes','societario','relatorios','admin'].forEach(v=>{
       const btn=document.createElement('button');btn.className='nav-btn'+(v==='monitor'?' active':'');btn.dataset.view=v;
-      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='esteira'?'🔄 Esteira de Fechamento':v==='fichas'?'🏢 Ficha das Empresas':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='bancosmes'?'🏦 Bancos':v==='societario'?'🏛️ Setor Societário':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
+      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='esteira'?'🔄 Esteira de Fechamento':v==='fichas'?'🏢 Ficha das Empresas':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='balancetes'?'📊 Balancetes':v==='bancosmes'?'🏦 Bancos':v==='societario'?'🏛️ Setor Societário':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
       btn.onclick=()=>trocarView(v,btn);nav.appendChild(btn);
     });
     document.getElementById('btn-add-tarefa').style.display='';
@@ -1500,6 +1514,10 @@ async function iniciarApp(){
     }
     const bes=document.createElement('button');bes.className='nav-btn';bes.textContent='🔄 Esteira de Fechamento';bes.dataset.view='esteira';
     bes.onclick=()=>trocarView('esteira',bes);nav.appendChild(bes);
+    if(u.setor==='contabil'){ // Carla/Neusa: fila de balancetes a entregar
+      const bbal=document.createElement('button');bbal.className='nav-btn';bbal.textContent='📊 Balancetes';bbal.dataset.view='balancetes';
+      bbal.onclick=()=>trocarView('balancetes',bbal);nav.appendChild(bbal);
+    }
     const bfi=document.createElement('button');bfi.className='nav-btn';bfi.textContent='🏢 Ficha das Empresas';bfi.dataset.view='fichas';
     bfi.onclick=()=>trocarView('fichas',bfi);nav.appendChild(bfi);
     document.getElementById('btn-add-tarefa').style.display='none';
@@ -1525,6 +1543,7 @@ async function iniciarApp(){
   await loadSocietario();
   await loadBancosMes();
   await loadNotas();
+  await loadBalancetes();
   await loadContabAnual();
   // Backup leve (2x/dia, da memória, 1 sessão). Checa no início e a cada 30 min — o timer só lê
   // a flag minúscula e o relógio; a cópia de verdade sai no máx 2x no dia inteiro (meio-dia e noite).
@@ -1553,6 +1572,7 @@ async function iniciarApp(){
           if(todos||keys.has(SK_SOCIETARIO)){ await loadSocietario(); if(viewAtual==='societario' && !_socEditando)renderSocietario(); }
           if(todos||keys.has(SK_BANCOS_MES)){ await loadBancosMes(); if(viewAtual==='bancosmes')renderBancosMes(); }
           if(todos||keys.has(SK_NOTAS)){ await loadNotas(); if(viewAtual==='notasfiscais' && !_notaEmitindo && !_notaEditando)renderNotasFiscais(); }
+          if(todos||keys.has(SK_BAL)){ await loadBalancetes(); if(viewAtual==='balancetes' && !_balEntregando && !_balEditando)renderBalancetes(); }
           if(todos||keys.has(SK_CONTAB_ANUAL)){ await loadContabAnual(); if(viewAtual==='contabanual'){ if(document.getElementById('ca-tablehost'))renderCaTable(); else renderContabAnual(); } }
           if(todos||keys.has(SK_EMPRESAS_CAD)){ await loadEmpresasCad(); }
           if(todos||keys.has(SK_COLAB)){ await loadColaboradores(); }
@@ -1577,7 +1597,7 @@ function trocarView(v,btn){
   document.body.classList.remove('membros-topo');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario'||v==='bancosmes'||v==='notasfiscais'||v==='esteira');
+  const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario'||v==='bancosmes'||v==='notasfiscais'||v==='balancetes'||v==='esteira');
   document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
   document.getElementById('painel-admin').style.display=v==='admin'?'block':'none';
@@ -1588,6 +1608,7 @@ function trocarView(v,btn){
   document.getElementById('painel-societario').style.display=v==='societario'?'block':'none';
   document.getElementById('painel-bancosmes').style.display=v==='bancosmes'?'block':'none';
   document.getElementById('painel-notasfiscais').style.display=v==='notasfiscais'?'block':'none';
+  document.getElementById('painel-balancetes').style.display=v==='balancetes'?'block':'none';
   document.getElementById('painel-esteira').style.display=v==='esteira'?'block':'none';
   document.getElementById('btn-add-tarefa').style.display=isGestora()&&!formViews&&v!=='fichas'?'':'none';
   if(v==='pendencias'){renderPendencias();return;}
@@ -1599,6 +1620,7 @@ function trocarView(v,btn){
   if(v==='societario'){renderSocietario();return;}
   if(v==='bancosmes'){renderBancosMes();return;}
   if(v==='notasfiscais'){renderNotasFiscais();return;}
+  if(v==='balancetes'){renderBalancetes();return;}
   if(v==='esteira'){renderEsteira();return;}
   setorAtual=v;membroAtual=null;empresaAtual=null;verHistorico=false;empFiltro='';
   const _lblOc=document.getElementById('lbl-ocultar');
@@ -1860,15 +1882,17 @@ function renderTarefas(){
   const _soc=setorAtual==='societario';
   const tabs=document.createElement('div');tabs.className='emp-tabs';
   tabs.innerHTML=`
-    <div class="emp-tab ${abaEmpresa!=='bancos'&&abaEmpresa!=='regime'&&abaEmpresa!=='obs'&&abaEmpresa!=='notas'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
+    <div class="emp-tab ${abaEmpresa!=='bancos'&&abaEmpresa!=='regime'&&abaEmpresa!=='obs'&&abaEmpresa!=='notas'&&abaEmpresa!=='balancetes'?'active':''}" onclick="trocarAbaEmpresa('tarefas')">📋 Tarefas</div>
     ${_soc?'':`<div class="emp-tab ${abaEmpresa==='bancos'?'active':''}" onclick="trocarAbaEmpresa('bancos')">🏦 Bancos</div>
     <div class="emp-tab ${abaEmpresa==='notas'?'active':''}" onclick="trocarAbaEmpresa('notas')">🧾 Notas p/ emitir</div>
+    ${(isGestora()||(USUARIOS[usuarioAtual]||{}).setor==='contabil')?`<div class="emp-tab ${abaEmpresa==='balancetes'?'active':''}" onclick="trocarAbaEmpresa('balancetes')">📊 Balancetes</div>`:''}
     <div class="emp-tab ${abaEmpresa==='regime'?'active':''}" onclick="trocarAbaEmpresa('regime')">⚖️ Regime / Importação</div>`}
     <div class="emp-tab ${abaEmpresa==='obs'?'active':''}" onclick="trocarAbaEmpresa('obs')">📝 Observações</div>`;
   col.appendChild(tabs);
 
   if(abaEmpresa==='bancos'){renderBancos(col);return;}
   if(abaEmpresa==='notas'){renderNotasEmpresa(col);return;}
+  if(abaEmpresa==='balancetes'){renderBalancetesEmpresa(col);return;}
   if(abaEmpresa==='regime'){renderRegimeImport(col);return;}
   if(abaEmpresa==='obs'){
     const _fo=getFicha(empresaAtual);
@@ -3487,6 +3511,229 @@ function renderNotaLista(){
     return (a.diaSolicitado||'9999-99-99').localeCompare(b2.diaSolicitado||'9999-99-99');
   });
   cont.innerHTML=lista.length?lista.map(n=>_notaCard(n,{podeEmitir:_podeEmitirNota(),podeEditar:isGestora(),showEmpresa:true,quick:isGestora()})).join(''):'<div class="vazio" style="padding:26px;text-align:center;">'+((_notaFiltroStatus||b)?'Nenhum pedido com esse filtro.':'Nenhum pedido ainda.')+'</div>';
+}
+// ----- 📊 Balancetes: a gestora solicita → a contábil (Carla/Neusa) entrega com o PDF -----
+function _podePedirBal(){ return isGestora(); }
+function _podeEntregarBal(){ return isGestora() || ((USUARIOS[usuarioAtual]||{}).setor==='contabil'); }
+function _balStatusLabel(s){ const x=BAL_STATUS.find(y=>y[0]===s); return x?x[1]:(s||''); }
+function _balStatusCor(s){ return {pendente:'#d97706',entregue:'#16a34a',cancelada:'#6b7280'}[s]||'#6b7280'; }
+function _balAtrasado(b){ return b.status==='pendente' && b.diaSolicitado && b.diaSolicitado<_hojeYMD(); }
+function _balPeriodo(b){ const i=b.mesIni||'', f=b.mesFim||''; if(!i&&!f)return '—'; if(!f||f===i)return mesLabel(i||f); return mesLabel(i)+' a '+mesLabel(f); }
+function _reRenderBal(){ if(viewAtual==='balancetes')renderBalancetes(); else if(empresaAtual&&abaEmpresa==='balancetes')renderTarefas(); }
+function toggleBalExp(id){ _balExp=_balExp===id?null:id; _reRenderBal(); }
+function _balForm(){
+  const editing=_balEditando && _balEditando!=='novo';
+  const b=editing?(balancetesDem.find(x=>x.id===_balEditando)||{}):{};
+  // dentro da empresa (aba) = empresa fixa; na view consolidada (Balancetes) = escolher no dropdown
+  const empFix=editing?(b.empresa||''):(viewAtual==='balancetes'?'':(empresaAtual||''));
+  const semEmp=!empFix;
+  const L='display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;';
+  const mesCur=(_hojeYMD()).slice(0,7);
+  const empsOrd=(TODAS_EMPRESAS||[]).filter(e=>empAtiva(e)).sort((a,b2)=>a.localeCompare(b2,'pt'));
+  return `<div class="rel-filtros-card" style="margin-bottom:16px;">
+    <div class="rel-filtros-titulo">${editing?'Editar pedido de balancete':'Novo pedido de balancete'}${empFix?' — '+_escP(empFix):''}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      ${semEmp?`<div style="grid-column:1/3;"><label style="${L}">Empresa *</label><select class="ficha-input" id="bal-empresa"><option value="">— Selecione a empresa —</option>${empsOrd.map(e=>`<option value="${_escAttrP(e)}"${b.empresa===e?' selected':''}>${_escP(e)}</option>`).join('')}</select></div>`:''}
+      <div><label style="${L}">Mês inicial *</label><input class="ficha-input" type="month" id="bal-mesini" value="${b.mesIni||mesCur}"/></div>
+      <div><label style="${L}">Mês final *</label><input class="ficha-input" type="month" id="bal-mesfim" value="${b.mesFim||b.mesIni||mesCur}"/></div>
+      <div><label style="${L}">Finalidade</label><select class="ficha-input" id="bal-finalidade"><option value="">—</option>${BAL_FINALIDADES.map(x=>`<option${b.finalidade===x?' selected':''}>${x}</option>`).join('')}</select></div>
+      <div><label style="${L}">Precisa até (data)</label><input class="ficha-input" type="date" id="bal-dia" value="${b.diaSolicitado||_hojeYMD()}"/></div>
+      <div style="grid-column:1/3;"><label style="${L}">Observações</label><textarea class="ficha-input" id="bal-obs" rows="2">${_escP(b.obs||'')}</textarea></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="rel-btn" onclick="salvarBalancete()">💾 Salvar pedido</button>
+      <button class="rel-btn rel-btn-sec" onclick="cancelarBalForm()">Cancelar</button>
+    </div>
+  </div>`;
+}
+function _balEntregaForm(b){
+  const L='display:block;font-size:11px;color:var(--muted);margin-bottom:3px;font-weight:600;';
+  return `<div class="rel-filtros-card" style="margin-bottom:16px;border-left:3px solid var(--green);">
+    <div class="rel-filtros-titulo">✅ Registrar entrega — ${_escP(b.empresa)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Balancete ${_balPeriodo(b)}${b.finalidade?' · '+_escP(b.finalidade):''}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label style="${L}">Data da entrega</label><input class="ficha-input" type="date" id="bal-dtentrega" value="${b.dataEntrega||_hojeYMD()}"/></div>
+      <div><label style="${L}">Balancete (PDF/arquivo)${b.anexo?' — já anexado; escolha outro para trocar':''}</label><input class="ficha-input" type="file" id="bal-arq" accept="${OBS_ACCEPT}"/></div>
+      <div style="grid-column:1/3;"><label style="${L}">Observação da entrega (opcional)</label><input class="ficha-input" id="bal-obsentrega" value="${_escAttrP(b.obsEntrega||'')}" placeholder="link, senha do PDF, obs..."/></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="rel-btn" onclick="confirmarEntregaBal()">✅ Confirmar entrega</button>
+      <button class="rel-btn rel-btn-sec" onclick="cancelarEntregaBal()">Cancelar</button>
+    </div>
+  </div>`;
+}
+function _balCard(b,opts){
+  opts=opts||{};
+  const exp=_balExp===b.id;
+  const atras=_balAtrasado(b);
+  const praHoje=b.status==='pendente'&&b.diaSolicitado===_hojeYMD();
+  const sc=_balStatusCor(b.status);
+  const fin=(b.status==='entregue'||b.status==='cancelada');
+  let corpo='';
+  if(exp){
+    corpo=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
+      <div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin-bottom:8px;">
+        <span>Período: ${_balPeriodo(b)}</span>
+        ${b.finalidade?`<span>Finalidade: ${_escP(b.finalidade)}</span>`:''}
+        ${b.diaSolicitado?`<span>Precisa até: ${_notaFmtData(b.diaSolicitado)}</span>`:''}
+      </div>
+      ${b.obs?`<div style="font-size:12px;margin-bottom:6px;"><b>Obs:</b> ${_escP(b.obs)}</div>`:''}
+      ${b.status==='entregue'?`<div style="font-size:12px;margin:6px 0;color:var(--green);"><b>✅ Entregue</b>${b.dataEntrega?' em '+_notaFmtData(b.dataEntrega):''}${b.entreguePor&&USUARIOS[b.entreguePor]?' por '+_escP(USUARIOS[b.entreguePor].nome):''}${b.obsEntrega?' · '+_escP(b.obsEntrega):''}</div>
+      ${b.anexo?`<div style="margin:6px 0;">${_anxChip(b.anexo,'',150)}</div>`:''}`:''}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+        ${(b.status==='pendente'&&opts.podeEntregar)?`<button class="rel-btn" onclick="entregarBalancete('${b.id}')">✅ Registrar entrega</button>`:''}
+        ${(b.status==='pendente'&&opts.podePedir)?`<button class="tfiltro-btn" onclick="editarBalancete('${b.id}')">✏️ Editar</button>`:''}
+        ${(b.status==='entregue'&&opts.podeEntregar)?`<button class="tfiltro-btn" onclick="entregarBalancete('${b.id}')" title="Trocar o arquivo ou a data">🔄 Refazer entrega</button>`:''}
+        ${(b.status!=='cancelada'&&b.status!=='entregue'&&(opts.podePedir||isGestora()))?`<button class="tfiltro-btn" onclick="mudarStatusBal('${b.id}','cancelada')">🚫 Cancelar pedido</button>`:''}
+        ${isGestora()?`<button class="btn-danger" onclick="excluirBalancete('${b.id}')" title="Excluir">🗑️</button>`:''}
+      </div>
+    </div>`;
+  }
+  return `<div class="rel-section" style="margin-bottom:10px;${fin?'opacity:.72;':''}${atras?'border-left:3px solid var(--red);':praHoje?'border-left:3px solid #d97706;':''}">
+    <div style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;" onclick="toggleBalExp('${b.id}')">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+          ${opts.showEmpresa?`<span style="font-size:14px;font-weight:700;color:var(--text);">${_escP(b.empresa)}</span>`:''}
+          <span style="font-size:${opts.showEmpresa?'12px':'14px'};font-weight:${opts.showEmpresa?'400':'700'};color:${opts.showEmpresa?'var(--muted)':'var(--text)'};">Balancete ${_balPeriodo(b)}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+          <span style="font-size:11px;background:${sc}22;color:${sc};padding:2px 8px;border-radius:5px;">${_balStatusLabel(b.status)}</span>
+          ${atras?`<span style="font-size:11px;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:5px;">⚠ Atrasado</span>`:praHoje?`<span style="font-size:11px;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:5px;">⏰ Para hoje</span>`:''}
+          ${b.finalidade?`<span style="font-size:11px;color:var(--muted);">${_escP(b.finalidade)}</span>`:''}
+          ${b.anexo?`<span style="font-size:11px;color:var(--green);">📎 arquivo</span>`:''}
+          ${(()=>{const su=b.solicitante&&USUARIOS[b.solicitante]?USUARIOS[b.solicitante]:null;return su?`<span style="font-size:11px;color:${su.cor};font-weight:600;">👤 ${_escP(su.nome)}</span>`:'';})()}
+        </div>
+      </div>
+      <div style="text-align:right;flex:none;">
+        <div style="font-size:11px;color:var(--muted);">${b.diaSolicitado?_notaFmtData(b.diaSolicitado):''}</div>
+      </div>
+    </div>
+    ${corpo}
+  </div>`;
+}
+function renderBalancetesEmpresa(col){
+  const wrap=document.createElement('div');wrap.className='ficha-wrap';
+  const lista=balancetesDem.filter(b=>b.empresa===empresaAtual).sort((a,b2)=>{
+    const af=(a.status!=='pendente')?1:0,bf=(b2.status!=='pendente')?1:0; if(af!==bf)return af-bf;
+    return (a.diaSolicitado||'9999').localeCompare(b2.diaSolicitado||'9999');
+  });
+  const podePedir=_podePedirBal(), podeEntregar=_podeEntregarBal();
+  const form=(_balEditando&&podePedir)?_balForm():'';
+  const enB=(_balEntregando&&podeEntregar)?balancetesDem.find(x=>x.id===_balEntregando&&x.empresa===empresaAtual):null;
+  const entregaForm=enB?_balEntregaForm(enB):'';
+  wrap.innerHTML=`
+    <div class="ficha-section">
+      <div class="ficha-section-titulo" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        <span>📊 Balancetes (contábil)</span>
+        ${podePedir?`<button class="rel-btn" onclick="novoBalancete()" style="font-size:12px;padding:5px 10px;">+ Solicitar balancete</button>`:''}
+      </div>
+      ${podePedir?'':'<div style="font-size:12px;color:var(--muted);margin:4px 0 8px;">Os pedidos são lançados pela gestão. A contábil registra a entrega.</div>'}
+      ${form}${entregaForm}
+      <div style="margin-top:8px;">${lista.length?lista.map(b=>_balCard(b,{podePedir,podeEntregar,showEmpresa:false})).join(''):'<div class="vazio" style="padding:18px;">Nenhum pedido de balancete para esta empresa ainda.</div>'}</div>
+    </div>`;
+  col.appendChild(wrap);
+}
+function renderBalancetes(){
+  const el=document.getElementById('painel-balancetes'); if(!el)return;
+  const hoje=_hojeYMD(); const mesCur=hoje.slice(0,7);
+  let pend=0,praHoje=0,atras=0,entMes=0;
+  balancetesDem.forEach(b=>{
+    if(b.status==='pendente'){pend++; if(b.diaSolicitado===hoje)praHoje++; if(_balAtrasado(b))atras++;}
+    if(b.status==='entregue'&&(b.dataEntrega||'').slice(0,7)===mesCur)entMes++;
+  });
+  const enB=(_balEntregando&&_podeEntregarBal())?balancetesDem.find(x=>x.id===_balEntregando):null;
+  const entregaForm=enB?_balEntregaForm(enB):'';
+  const editForm=(_balEditando&&_podePedirBal())?_balForm():'';
+  el.innerHTML=`
+    <div class="rel-titulo">📊 Balancetes</div>
+    <div class="rel-sub">Pedidos de balancete — a gestão solicita e a contábil (Carla/Neusa) entrega com o PDF.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin:14px 0;">
+      ${_socMetrica('Pendentes',pend,'')}
+      ${_socMetrica('Para hoje',praHoje,'#d97706')}
+      ${_socMetrica('Atrasados',atras,'#dc2626')}
+      ${_socMetrica('Entregues no mês',entMes,'#16a34a')}
+    </div>
+    <div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap;align-items:center;">
+      ${_podePedirBal()?`<button class="rel-btn" onclick="novoBalancete()">+ Novo pedido</button>`:''}
+      <select class="ficha-input" style="max-width:200px;" onchange="_balFiltroStatus=this.value;renderBalLista()">
+        <option value="">Todos os status</option>
+        ${BAL_STATUS.map(s=>`<option value="${s[0]}"${_balFiltroStatus===s[0]?' selected':''}>${s[1]}</option>`).join('')}
+      </select>
+      <input class="ficha-input" placeholder="🔍 Buscar empresa, período..." value="${_escAttrP(_balBusca)}" oninput="_balBusca=this.value;renderBalLista()" style="max-width:260px;"/>
+      <span style="font-size:12px;color:var(--muted);">${balancetesDem.length} pedido(s)</span>
+    </div>
+    ${editForm}${entregaForm}
+    <div id="bal-lista"></div>`;
+  renderBalLista();
+}
+function renderBalLista(){
+  const cont=document.getElementById('bal-lista'); if(!cont)return;
+  const b=(_balBusca||'').toLowerCase().trim();
+  let lista=balancetesDem.filter(x=>{
+    if(_balFiltroStatus && x.status!==_balFiltroStatus)return false;
+    if(b && !((x.empresa||'')+' '+_balPeriodo(x)+' '+(x.finalidade||'')+' '+(x.obs||'')).toLowerCase().includes(b))return false;
+    return true;
+  });
+  lista.sort((a,b2)=>{
+    const af=(a.status!=='pendente')?1:0,bf=(b2.status!=='pendente')?1:0; if(af!==bf)return af-bf;
+    const aa=_balAtrasado(a)?0:1,ba=_balAtrasado(b2)?0:1; if(aa!==ba)return aa-ba;
+    return (a.diaSolicitado||'9999-99-99').localeCompare(b2.diaSolicitado||'9999-99-99');
+  });
+  cont.innerHTML=lista.length?lista.map(x=>_balCard(x,{podePedir:_podePedirBal(),podeEntregar:_podeEntregarBal(),showEmpresa:true})).join(''):'<div class="vazio" style="padding:26px;text-align:center;">'+((_balFiltroStatus||b)?'Nenhum pedido com esse filtro.':'Nenhum pedido ainda.')+'</div>';
+}
+function novoBalancete(){ if(!_podePedirBal())return; _balEditando='novo'; _balEntregando=null; _reRenderBal(); setTimeout(()=>{const e=document.getElementById('bal-empresa')||document.getElementById('bal-mesini');e&&e.focus();},30); }
+function editarBalancete(id){ if(!_podePedirBal())return; _balEditando=id; _balEntregando=null; _reRenderBal(); }
+function cancelarBalForm(){ _balEditando=null; _reRenderBal(); }
+async function salvarBalancete(){
+  if(!_podePedirBal()){toast('Sem permissão','#dc2626');return;}
+  const g=id=>document.getElementById(id);
+  const editing=_balEditando && _balEditando!=='novo';
+  let emp;
+  if(editing){ emp=(balancetesDem.find(x=>x.id===_balEditando)||{}).empresa; }
+  else if(viewAtual==='balancetes'){ emp=((g('bal-empresa')||{}).value||'').trim(); }
+  else { emp=empresaAtual; }
+  if(!emp){toast('Selecione a empresa','#d97706');return;}
+  const mesIni=g('bal-mesini').value||'', mesFim=g('bal-mesfim').value||'';
+  if(!mesIni){toast('Informe o mês inicial','#d97706');return;}
+  if(mesFim && mesFim<mesIni){toast('O mês final não pode ser antes do inicial','#d97706');return;}
+  const campos={ empresa:emp, mesIni, mesFim:mesFim||mesIni, finalidade:g('bal-finalidade').value||'', diaSolicitado:g('bal-dia').value||_hojeYMD(), obs:(g('bal-obs').value||'').trim() };
+  if(editing){ const b=balancetesDem.find(x=>x.id===_balEditando); if(b)Object.assign(b,campos,{atualizadoEm:Date.now()}); }
+  else { balancetesDem.push(Object.assign({id:'bal_'+Date.now(),status:'pendente',solicitante:usuarioAtual,criadoEm:Date.now()},campos)); }
+  _balEditando=null;
+  await saveBalancetes(); _reRenderBal(); toast('✓ Pedido salvo!');
+}
+function entregarBalancete(id){ if(!_podeEntregarBal()){toast('Sem permissão','#dc2626');return;} _balEntregando=id; _balEditando=null; _reRenderBal(); }
+function cancelarEntregaBal(){ _balEntregando=null; _reRenderBal(); }
+async function confirmarEntregaBal(){
+  if(!_podeEntregarBal()){toast('Sem permissão','#dc2626');return;}
+  const b=balancetesDem.find(x=>x.id===_balEntregando); if(!b){_balEntregando=null;return;}
+  const arqInp=document.getElementById('bal-arq');
+  const file=arqInp&&arqInp.files&&arqInp.files[0];
+  const novaData=document.getElementById('bal-dtentrega').value||_hojeYMD();
+  const novaObs=(document.getElementById('bal-obsentrega').value||'').trim();
+  if(file){
+    toast('Enviando arquivo...');
+    try{ const url=await uploadImagem(file,'balancetes'); b.anexo={u:url,n:file.name}; }
+    catch(e){ console.warn('[CCC] upload balancete',e); toast('Erro ao enviar o arquivo','#dc2626'); return; }
+  }
+  b.dataEntrega=novaData; b.obsEntrega=novaObs;
+  b.status='entregue'; b.entreguePor=usuarioAtual; b.entregueEm=Date.now();
+  _balEntregando=null;
+  await saveBalancetes(); _reRenderBal(); toast('✅ Balancete registrado como entregue!');
+}
+async function mudarStatusBal(id,val){
+  if(!_podePedirBal()&&!isGestora()){toast('Sem permissão','#dc2626');return;}
+  const b=balancetesDem.find(x=>x.id===id); if(!b)return;
+  if(val==='cancelada' && !confirm('Cancelar este pedido de balancete?'))return;
+  b.status=val; b.atualizadoEm=Date.now();
+  await saveBalancetes(); _reRenderBal(); toast('Pedido atualizado');
+}
+async function excluirBalancete(id){
+  if(!isGestora()){toast('Só a gestora exclui — para encerrar, use Cancelar pedido','#dc2626');return;}
+  const b=balancetesDem.find(x=>x.id===id); if(!b)return;
+  if(!confirm('Excluir de vez este pedido de balancete de "'+b.empresa+'"?'))return;
+  balancetesDem=balancetesDem.filter(x=>x.id!==id);
+  await saveBalancetes(); _reRenderBal(); toast('Pedido excluído');
 }
 // ============ fim Telas do Uriel ============
 
