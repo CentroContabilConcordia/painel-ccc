@@ -378,7 +378,7 @@ body.membros-topo .col-empresas,body.membros-topo #col-tarefas{height:calc(100vh
 .banco-info{flex:1;}
 .banco-nome{font-size:15px;font-weight:600;color:var(--text);}
 .banco-detalhe{font-size:13px;color:var(--muted);}
-.banco-status-sel{background:#fff;border:1.5px solid var(--border);border-radius:5px;padding:4px 8px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;}
+.banco-status-sel{background:#fff;border:1.5px solid var(--border);border-radius:6px;padding:7px 11px;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;}
 .banco-status-sel:focus{border-color:var(--accent);}
 .banco-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px;opacity:.4;transition:all .2s;}
 .banco-del:hover{color:var(--red);opacity:1;}
@@ -2599,6 +2599,21 @@ function exportarRelatorioCadastroCSV(){
   toast('✓ Arquivo exportado! Abra no Excel.');
 }
 
+// Origens do extrato bancário (de onde vem o extrato de cada conta)
+const BANCO_ORIGENS=[
+  {v:'zrp',     lbl:'🔑 Acesso ZRP'},
+  {v:'cc',      lbl:'🔑 Acesso Centro Contábil'},
+  {v:'login',   lbl:'🔑 Acesso Login e senha'},
+  {v:'cliente', lbl:'📩 Cliente envia'},
+];
+function bancoOrigemLabel(o){ if(!o)return ''; const x=BANCO_ORIGENS.find(e=>e.v===o); if(x)return x.lbl; if(o==='acesso')return '🔑 Acesso'; return o; }
+function bancoOrigemOpts(cur){
+  let h=`<option value=""${!cur?' selected':''}>❓ Origem?</option>`;
+  h+=BANCO_ORIGENS.map(e=>`<option value="${e.v}"${cur===e.v?' selected':''}>${e.lbl}</option>`).join('');
+  if(cur==='acesso')h+=`<option value="acesso" selected>🔑 Acesso (antigo — reescolha)</option>`;
+  return h;
+}
+
 // ===== Relatório de Bancos Cadastrados =====
 const CAMPOS_BANCO=[
  {key:'agencia',label:'Agência',def:true},
@@ -2622,7 +2637,7 @@ function getCamposBancoSelecionados(){
   return CAMPOS_BANCO.filter(c=>set.includes(c.key));
 }
 function valorCampoBanco(b,key){
-  if(key==='origem') return b.origem==='acesso'?'Acesso (escritório)':b.origem==='cliente'?'Cliente envia':'';
+  if(key==='origem') return bancoOrigemLabel(b.origem).replace(/^[^\w]+\s*/,'');
   return b[key]||'';
 }
 function gerarRelatorioBancos(){
@@ -3097,6 +3112,7 @@ function renderBmLista(){
         <div style="flex:1 1 170px;min-width:150px;">
           <div style="font-weight:600;font-size:13.5px;">${_escP(c.nome)}</div>
           ${det?`<div style="color:var(--muted);font-size:11px;margin-top:1px;">${_escP(det)}</div>`:''}
+          ${c.origem?`<div style="margin-top:4px;"><span style="font-size:11.5px;background:var(--surface3);color:var(--text2);padding:2px 9px;border-radius:5px;font-weight:600;">${bancoOrigemLabel(c.origem)}</span></div>`:`<div style="margin-top:4px;"><span style="font-size:11px;color:#d97706;">❓ Origem não definida</span></div>`}
         </div>
         <div style="display:flex;gap:9px;flex-wrap:wrap;">
           ${_bmChip(idx,'ext',r.ext,'📩 Extrato recebido')}
@@ -4607,9 +4623,7 @@ function renderBancos(col){
             <div class="banco-detalhe">${b.agencia?'Ag: '+b.agencia:''}${b.agencia&&b.conta?' · ':''}${b.conta?'Cc: '+b.conta:''}</div>
           </div>
           <select class="banco-status-sel" onchange="mudarOrigemBanco('${b.id}',this.value)" title="Origem do extrato">
-            <option value=""${!b.origem?' selected':''}>❓ Origem?</option>
-            <option value="acesso"${b.origem==='acesso'?' selected':''}>🔑 Acesso</option>
-            <option value="cliente"${b.origem==='cliente'?' selected':''}>📩 Cliente envia</option>
+            ${bancoOrigemOpts(b.origem)}
           </select>
           <select class="banco-status-sel" onchange="mudarStatusBanco('${b.id}',this.value)" style="color:${stCor}">
             <option value="pendente"${st==='pendente'?' selected':''}>⏳ Pendente</option>
@@ -4642,8 +4656,7 @@ function renderBancos(col){
             <input class="banco-add-inp" id="b-conta" placeholder="Conta"/>
             <select class="banco-add-inp" id="b-origem">
               <option value="">Origem do extrato…</option>
-              <option value="acesso">🔑 Acesso (escritório)</option>
-              <option value="cliente">📩 Cliente envia</option>
+              ${BANCO_ORIGENS.map(e=>`<option value="${e.v}">${e.lbl}</option>`).join('')}
             </select>
             <button class="banco-add-btn" onclick="adicionarBanco()">+ Banco</button>
           </div>
@@ -4698,7 +4711,7 @@ async function mudarOrigemBanco(bid,val){
   b.origem=val;
   await saveBancos();
   renderTarefas();
-  toast(val==='acesso'?'🔑 Extrato por acesso do escritório':val==='cliente'?'📩 Extrato enviado pelo cliente':'Origem definida');
+  toast(val?('✓ Origem: '+bancoOrigemLabel(val)):'Origem removida');
 }
 
 async function mudarStatusBanco(bid,val){
