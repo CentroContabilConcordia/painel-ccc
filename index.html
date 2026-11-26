@@ -97,6 +97,18 @@ body.lateral #painel-operacional{height:calc(100vh - 56px);}
 #nav-wrap.lateral .nav-btn{width:100%;text-align:left;background:transparent;border:1.5px solid transparent;color:#eef2e2;border-radius:9px;padding:10px 12px;font-weight:500;font-size:13.5px;margin:0;transition:background .15s;}
 #nav-wrap.lateral .nav-btn:hover{background:rgba(255,255,255,.09);color:#fff;border-color:transparent;}
 #nav-wrap.lateral .nav-btn.active{background:rgba(255,255,255,.17);color:#fff;font-weight:700;border-color:transparent;}
+/* Grupos do menu que abrem/fecham (ex.: Setor Fiscal / Setor Contábil) */
+.nav-grp{display:flex;flex-direction:column;}
+.nav-grp-head{cursor:pointer;}
+.nav-grp-sub{display:none;}
+.nav-grp.open>.nav-grp-sub{display:flex;flex-direction:column;}
+#nav-wrap.lateral .nav-grp-head{width:100%;display:flex;align-items:center;gap:6px;text-align:left;background:transparent;border:1.5px solid transparent;color:#eef2e2;border-radius:9px;padding:10px 12px;font-weight:500;font-size:13.5px;font-family:'DM Sans',sans-serif;transition:background .15s;}
+#nav-wrap.lateral .nav-grp-head:hover{background:rgba(255,255,255,.09);color:#fff;}
+#nav-wrap.lateral .nav-grp.open>.nav-grp-head{color:#fff;}
+#nav-wrap.lateral .nav-grp-chev{margin-left:auto;font-size:10px;transition:transform .18s;opacity:.8;}
+#nav-wrap.lateral .nav-grp.open>.nav-grp-head .nav-grp-chev{transform:rotate(90deg);}
+#nav-wrap.lateral .nav-grp-sub{margin:2px 0 4px 14px;padding-left:8px;border-left:1.5px solid rgba(255,255,255,.14);gap:4px;}
+#nav-wrap.lateral .nav-grp-sub .nav-btn{font-size:13px;padding:8px 10px;}
 body.lateral header .logo{display:none;}
 .ccc-burger{display:none;background:none;border:1px solid var(--border);border-radius:8px;width:36px;height:36px;font-size:16px;cursor:pointer;color:var(--text2);}
 @media(max-width:820px){
@@ -1494,11 +1506,16 @@ async function iniciarApp(){
     bfiu.onclick=()=>trocarView('fichas',bfiu);nav.appendChild(bfiu);
     document.getElementById('btn-add-tarefa').style.display='none';
   } else if(isGestora()){
-    ['monitor','esteira','fichas','fiscal','contabil','balancetes','bancosmes','societario','relatorios','admin'].forEach(v=>{
-      const btn=document.createElement('button');btn.className='nav-btn'+(v==='monitor'?' active':'');btn.dataset.view=v;
-      btn.textContent=v==='monitor'?'📡 Monitoramento':v==='esteira'?'🔄 Esteira de Fechamento':v==='fichas'?'🏢 Ficha das Empresas':v==='fiscal'?'📊 Setor Fiscal':v==='contabil'?'📚 Setor Contábil':v==='balancetes'?'📊 Balancetes':v==='bancosmes'?'🏦 Bancos':v==='societario'?'🏛️ Setor Societário':v==='relatorios'?'📈 Relatórios':'⚙️ Administração';
-      btn.onclick=()=>trocarView(v,btn);nav.appendChild(btn);
-    });
+    const _flat=(v,label,ativo)=>{const btn=document.createElement('button');btn.className='nav-btn'+(ativo?' active':'');btn.dataset.view=v;btn.textContent=label;btn.onclick=()=>trocarView(v,btn);nav.appendChild(btn);return btn;};
+    _flat('monitor','📡 Monitoramento',true);
+    _flat('esteira','🔄 Esteira de Fechamento');
+    _flat('fichas','🏢 Ficha das Empresas');
+    // Setores como grupos que abrem/fecham. Bancos aparece nos dois (mesma tela).
+    _navGrupo(nav,'📊 Setor Fiscal',[{v:'fiscal',label:'📋 Fechamento'},{v:'bancosmes',label:'🏦 Bancos'}]);
+    _navGrupo(nav,'📚 Setor Contábil',[{v:'contabil',label:'📋 Fechamento'},{v:'balancetes',label:'📊 Balancetes'},{v:'bancosmes',label:'🏦 Bancos'}]);
+    _flat('societario','🏛️ Setor Societário');
+    _flat('relatorios','📈 Relatórios');
+    _flat('admin','⚙️ Administração');
     document.getElementById('btn-add-tarefa').style.display='';
   } else {
     const setor=u.setor;
@@ -1509,15 +1526,11 @@ async function iniciarApp(){
       const bc=document.createElement('button');bc.className='nav-btn';bc.textContent='📚 Setor Contábil';
       bc.onclick=()=>trocarView('contabil',bc);nav.appendChild(bc);
     } else {
-      const btn=document.createElement('button');btn.className='nav-btn active';btn.textContent='📚 Setor Contábil';
-      btn.onclick=()=>trocarView('contabil',btn);nav.appendChild(btn);
+      // Carla/Neusa: Setor Contábil vira grupo (Fechamento + Balancetes dela)
+      _navGrupo(nav,'📚 Setor Contábil',[{v:'contabil',label:'📋 Fechamento'},{v:'balancetes',label:'📊 Balancetes'}]);
     }
     const bes=document.createElement('button');bes.className='nav-btn';bes.textContent='🔄 Esteira de Fechamento';bes.dataset.view='esteira';
     bes.onclick=()=>trocarView('esteira',bes);nav.appendChild(bes);
-    if(u.setor==='contabil'){ // Carla/Neusa: fila de balancetes a entregar
-      const bbal=document.createElement('button');bbal.className='nav-btn';bbal.textContent='📊 Balancetes';bbal.dataset.view='balancetes';
-      bbal.onclick=()=>trocarView('balancetes',bbal);nav.appendChild(bbal);
-    }
     const bfi=document.createElement('button');bfi.className='nav-btn';bfi.textContent='🏢 Ficha das Empresas';bfi.dataset.view='fichas';
     bfi.onclick=()=>trocarView('fichas',bfi);nav.appendChild(bfi);
     document.getElementById('btn-add-tarefa').style.display='none';
@@ -1591,12 +1604,30 @@ async function iniciarApp(){
   trocarView(isGestora()?'monitor':(u.role==='controle'?'contabanual':u.role==='societario'?'societario':u.role==='uriel'?'bancosmes':USUARIOS[usuarioAtual].setor),document.querySelector('.nav-btn'));
 }
 
+// Grupo de menu que abre/fecha (ex.: Setor Fiscal / Setor Contábil), com sub-itens indentados.
+function _navGrupo(nav,titulo,itens){
+  const grp=document.createElement('div');grp.className='nav-grp';
+  const head=document.createElement('button');head.className='nav-grp-head';
+  head.appendChild(document.createTextNode(titulo));
+  const chev=document.createElement('span');chev.className='nav-grp-chev';chev.textContent='▶';head.appendChild(chev);
+  head.onclick=()=>grp.classList.toggle('open');
+  grp.appendChild(head);
+  const sub=document.createElement('div');sub.className='nav-grp-sub';
+  itens.forEach(it=>{
+    const b=document.createElement('button');b.className='nav-btn';b.dataset.view=it.v;b.textContent=it.label;
+    b.onclick=()=>trocarView(it.v,b);
+    sub.appendChild(b);
+  });
+  grp.appendChild(sub);nav.appendChild(grp);
+  return grp;
+}
 function trocarView(v,btn){
   viewAtual=v;
   document.body.classList.remove('side-open');
   document.body.classList.remove('membros-topo');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
+  if(btn){ const _g=btn.closest('.nav-grp'); if(_g)_g.classList.add('open'); } // revela o grupo do item navegado
   const formViews=(v==='relatorios'||v==='admin'||v==='monitor'||v==='processos'||v==='contabanual'||v==='pendencias'||v==='societario'||v==='bancosmes'||v==='notasfiscais'||v==='balancetes'||v==='esteira');
   document.getElementById('painel-operacional').style.display=formViews?'none':'flex';
   document.getElementById('painel-relatorios').style.display=v==='relatorios'?'block':'none';
@@ -2052,7 +2083,7 @@ function renderPendencias(){
 function abrirPendenciaIdx(idx){
   const i=_pendRows[idx], s=_pendSubj; if(!i||!s)return;
   setorAtual=s.setor; mesAtual=i.mes; if(s.setor==='fiscal')membroAtual=s.mk;
-  const btn=[...document.querySelectorAll('.nav-btn')].find(b=>b.textContent.includes(s.setor==='fiscal'?'Setor Fiscal':'Setor Contábil'));
+  const btn=document.querySelector('.nav-btn[data-view="'+s.setor+'"]');
   trocarView(s.setor,btn);
   selecionarEmpresa(i.emp);
 }
@@ -3515,6 +3546,9 @@ function renderNotaLista(){
 // ----- 📊 Balancetes: a gestora solicita → a contábil (Carla/Neusa) entrega com o PDF -----
 function _podePedirBal(){ return isGestora(); }
 function _podeEntregarBal(){ return isGestora() || ((USUARIOS[usuarioAtual]||{}).setor==='contabil'); }
+// Visibilidade por destinatário: a gestora vê tudo; cada contábil vê só o que é dela (b.resp).
+// Pedidos antigos sem destinatário (b.resp vazio) continuam visíveis às duas até a gestão definir.
+function _balVisivel(b){ if(isGestora())return true; if(((USUARIOS[usuarioAtual]||{}).setor)==='contabil') return !b.resp || b.resp===usuarioAtual; return true; }
 function _balStatusLabel(s){ const x=BAL_STATUS.find(y=>y[0]===s); return x?x[1]:(s||''); }
 function _balStatusCor(s){ return {pendente:'#d97706',entregue:'#16a34a',cancelada:'#6b7280'}[s]||'#6b7280'; }
 function _balAtrasado(b){ return b.status==='pendente' && b.diaSolicitado && b.diaSolicitado<_hojeYMD(); }
@@ -3534,6 +3568,7 @@ function _balForm(){
     <div class="rel-filtros-titulo">${editing?'Editar pedido de balancete':'Novo pedido de balancete'}${empFix?' — '+_escP(empFix):''}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       ${semEmp?`<div style="grid-column:1/3;"><label style="${L}">Empresa *</label><select class="ficha-input" id="bal-empresa"><option value="">— Selecione a empresa —</option>${empsOrd.map(e=>`<option value="${_escAttrP(e)}"${b.empresa===e?' selected':''}>${_escP(e)}</option>`).join('')}</select></div>`:''}
+      <div style="grid-column:1/3;"><label style="${L}">Solicitar a (contábil) *</label><select class="ficha-input" id="bal-resp"><option value="">— Escolha quem vai fazer —</option>${MEMBROS_CONTABIL.map(m=>`<option value="${m.id}"${b.resp===m.id?' selected':''}>${_escP(m.nome)}</option>`).join('')}</select></div>
       <div><label style="${L}">Mês inicial *</label><input class="ficha-input" type="month" id="bal-mesini" value="${b.mesIni||mesCur}"/></div>
       <div><label style="${L}">Mês final *</label><input class="ficha-input" type="month" id="bal-mesfim" value="${b.mesFim||b.mesIni||mesCur}"/></div>
       <div><label style="${L}">Finalidade</label><select class="ficha-input" id="bal-finalidade"><option value="">—</option>${BAL_FINALIDADES.map(x=>`<option${b.finalidade===x?' selected':''}>${x}</option>`).join('')}</select></div>
@@ -3601,6 +3636,7 @@ function _balCard(b,opts){
           ${atras?`<span style="font-size:11px;background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:5px;">⚠ Atrasado</span>`:praHoje?`<span style="font-size:11px;background:#fef3c7;color:#b45309;padding:2px 8px;border-radius:5px;">⏰ Para hoje</span>`:''}
           ${b.finalidade?`<span style="font-size:11px;color:var(--muted);">${_escP(b.finalidade)}</span>`:''}
           ${b.anexo?`<span style="font-size:11px;color:var(--green);">📎 arquivo</span>`:''}
+          ${(()=>{const r=b.resp&&USUARIOS[b.resp]?USUARIOS[b.resp]:null;return r?`<span style="font-size:11px;background:${r.cor}22;color:${r.cor};padding:2px 8px;border-radius:5px;font-weight:600;">📊 ${_escP(r.nome)}</span>`:'';})()}
           ${(()=>{const su=b.solicitante&&USUARIOS[b.solicitante]?USUARIOS[b.solicitante]:null;return su?`<span style="font-size:11px;color:${su.cor};font-weight:600;">👤 ${_escP(su.nome)}</span>`:'';})()}
         </div>
       </div>
@@ -3613,7 +3649,7 @@ function _balCard(b,opts){
 }
 function renderBalancetesEmpresa(col){
   const wrap=document.createElement('div');wrap.className='ficha-wrap';
-  const lista=balancetesDem.filter(b=>b.empresa===empresaAtual).sort((a,b2)=>{
+  const lista=balancetesDem.filter(b=>b.empresa===empresaAtual && _balVisivel(b)).sort((a,b2)=>{
     const af=(a.status!=='pendente')?1:0,bf=(b2.status!=='pendente')?1:0; if(af!==bf)return af-bf;
     return (a.diaSolicitado||'9999').localeCompare(b2.diaSolicitado||'9999');
   });
@@ -3638,6 +3674,7 @@ function renderBalancetes(){
   const hoje=_hojeYMD(); const mesCur=hoje.slice(0,7);
   let pend=0,praHoje=0,atras=0,entMes=0;
   balancetesDem.forEach(b=>{
+    if(!_balVisivel(b))return;
     if(b.status==='pendente'){pend++; if(b.diaSolicitado===hoje)praHoje++; if(_balAtrasado(b))atras++;}
     if(b.status==='entregue'&&(b.dataEntrega||'').slice(0,7)===mesCur)entMes++;
   });
@@ -3660,7 +3697,7 @@ function renderBalancetes(){
         ${BAL_STATUS.map(s=>`<option value="${s[0]}"${_balFiltroStatus===s[0]?' selected':''}>${s[1]}</option>`).join('')}
       </select>
       <input class="ficha-input" placeholder="🔍 Buscar empresa, período..." value="${_escAttrP(_balBusca)}" oninput="_balBusca=this.value;renderBalLista()" style="max-width:260px;"/>
-      <span style="font-size:12px;color:var(--muted);">${balancetesDem.length} pedido(s)</span>
+      <span style="font-size:12px;color:var(--muted);">${balancetesDem.filter(_balVisivel).length} pedido(s)</span>
     </div>
     ${editForm}${entregaForm}
     <div id="bal-lista"></div>`;
@@ -3670,6 +3707,7 @@ function renderBalLista(){
   const cont=document.getElementById('bal-lista'); if(!cont)return;
   const b=(_balBusca||'').toLowerCase().trim();
   let lista=balancetesDem.filter(x=>{
+    if(!_balVisivel(x))return false;
     if(_balFiltroStatus && x.status!==_balFiltroStatus)return false;
     if(b && !((x.empresa||'')+' '+_balPeriodo(x)+' '+(x.finalidade||'')+' '+(x.obs||'')).toLowerCase().includes(b))return false;
     return true;
@@ -3693,10 +3731,12 @@ async function salvarBalancete(){
   else if(viewAtual==='balancetes'){ emp=((g('bal-empresa')||{}).value||'').trim(); }
   else { emp=empresaAtual; }
   if(!emp){toast('Selecione a empresa','#d97706');return;}
+  const resp=((g('bal-resp')||{}).value||'').trim();
+  if(!resp){toast('Escolha a quem solicitar (Carla ou Neusa)','#d97706');return;}
   const mesIni=g('bal-mesini').value||'', mesFim=g('bal-mesfim').value||'';
   if(!mesIni){toast('Informe o mês inicial','#d97706');return;}
   if(mesFim && mesFim<mesIni){toast('O mês final não pode ser antes do inicial','#d97706');return;}
-  const campos={ empresa:emp, mesIni, mesFim:mesFim||mesIni, finalidade:g('bal-finalidade').value||'', diaSolicitado:g('bal-dia').value||_hojeYMD(), obs:(g('bal-obs').value||'').trim() };
+  const campos={ empresa:emp, resp, mesIni, mesFim:mesFim||mesIni, finalidade:g('bal-finalidade').value||'', diaSolicitado:g('bal-dia').value||_hojeYMD(), obs:(g('bal-obs').value||'').trim() };
   if(editing){ const b=balancetesDem.find(x=>x.id===_balEditando); if(b)Object.assign(b,campos,{atualizadoEm:Date.now()}); }
   else { balancetesDem.push(Object.assign({id:'bal_'+Date.now(),status:'pendente',solicitante:usuarioAtual,criadoEm:Date.now()},campos)); }
   _balEditando=null;
